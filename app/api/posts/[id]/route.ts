@@ -57,7 +57,6 @@ export async function GET(request: Request, context: RouteContext) {
  *   status          string   "draft" | "published" | "archived"
  *   tags            array    ["tag1", "tag2"]
  *   featured_home   boolean
- *   meta_description string
  *   source_url      string
  *   published_at    string   ISO 8601
  *   slug            string
@@ -106,7 +105,6 @@ export async function PUT(request: Request, context: RouteContext) {
     if (body.cover_image_url !== undefined) updateData.cover_image_url = body.cover_image_url || null
     if (body.category_id !== undefined) updateData.category_id = body.category_id || null
     if (body.columnist_id !== undefined) updateData.columnist_id = body.columnist_id || null
-    if (body.meta_description !== undefined) updateData.meta_description = body.meta_description || null
     if (body.source_url !== undefined) updateData.source_url = body.source_url || null
     if (body.featured_home !== undefined) updateData.featured_home = Boolean(body.featured_home)
     if (body.tags !== undefined) updateData.tags = Array.isArray(body.tags) ? body.tags : []
