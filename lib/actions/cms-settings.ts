@@ -87,8 +87,10 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
     const fileExt = file.name.split('.').pop()
     const fileName = `site-logo-${Date.now()}.${fileExt}`
 
+    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
+
     const { data, error } = await supabase.storage
-        .from('media')
+        .from(bucket)
         .upload(`branding/${fileName}`, file, {
             cacheControl: '3600',
             upsert: true
@@ -100,7 +102,7 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
     }
 
     const { data: { publicUrl } } = supabase.storage
-        .from('media')
+        .from(bucket)
         .getPublicUrl(`branding/${fileName}`)
 
     // Update settings with new logo URL
@@ -122,8 +124,10 @@ export async function uploadFavicon(formData: FormData): Promise<{ success: bool
     const fileExt = file.name.split('.').pop()
     const fileName = `favicon-${Date.now()}.${fileExt}`
 
+    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
+
     const { data, error } = await supabase.storage
-        .from('media')
+        .from(bucket)
         .upload(`branding/${fileName}`, file, {
             cacheControl: '3600',
             upsert: true
@@ -135,7 +139,7 @@ export async function uploadFavicon(formData: FormData): Promise<{ success: bool
     }
 
     const { data: { publicUrl } } = supabase.storage
-        .from('media')
+        .from(bucket)
         .getPublicUrl(`branding/${fileName}`)
 
     // Update settings with new favicon URL
