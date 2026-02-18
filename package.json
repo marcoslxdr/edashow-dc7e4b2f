@@ -15,7 +15,8 @@
     "migrate:images": "tsx scripts/migrate-to-supabase.ts",
     "migrate:fallback-posts": "tsx scripts/migrate-fallback-posts.ts",
     "reset:admin": "tsx scripts/reset-admin.ts",
-    "diagnose:admin": "tsx scripts/diagnose-admin.ts"
+    "diagnose:admin": "tsx scripts/diagnose-admin.ts",
+    "fix:logo-url-column": "tsx scripts/fix-logo-url-column.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.14",
