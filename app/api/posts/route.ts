@@ -10,8 +10,8 @@ import { validateApiKey, generateSlug } from '@/lib/api-auth'
  * Query params:
  *   status       - "draft" | "published" | "archived"
  *   category_id  - UUID da categoria
- *   limit        - número de resultados (padrão: 20, máx: 100)
- *   offset       - paginação (padrão: 0)
+ *   limit        - nÃºmero de resultados (padrÃ£o: 20, mÃ¡x: 100)
+ *   offset       - paginaÃ§Ã£o (padrÃ£o: 0)
  *
  * Headers:
  *   Authorization: Bearer <POSTS_API_KEY>
@@ -32,7 +32,7 @@ export async function GET(request: Request) {
         .from('posts')
         .select(`
             id, title, slug, excerpt, cover_image_url, status, published_at,
-            featured_home, tags, meta_description, source_url, created_at, updated_at,
+            featured_home, tags, source_url, created_at, updated_at,
             category:categories(id, name, slug),
             author:columnists(id, name, slug)
         `)
@@ -67,19 +67,19 @@ export async function GET(request: Request) {
  *   Content-Type: application/json
  *
  * Body (JSON):
- *   title           string  OBRIGATÓRIO
- *   content         string  OBRIGATÓRIO  (HTML ou texto)
+ *   title           string  OBRIGATÃRIO
+ *   content         string  OBRIGATÃRIO  (HTML ou texto)
  *   excerpt         string  opcional     (resumo curto)
  *   cover_image_url string  opcional     (URL da imagem destaque)
  *   category_id     string  opcional     (UUID da categoria)
  *   columnist_id    string  opcional     (UUID do colunista/autor)
- *   status          string  opcional     "draft" | "published" | "archived" (padrão: "draft")
+ *   status          string  opcional     "draft" | "published" | "archived" (padrÃ£o: "draft")
  *   tags            array   opcional     ["tag1", "tag2"]
  *   featured_home   boolean opcional     (destaque na homepage)
- *   meta_description string opcional    (SEO)
+ *, string opcional    (SEO)
  *   source_url      string  opcional     (URL da fonte original)
- *   published_at    string  opcional     (ISO 8601, padrão: agora se status=published)
- *   slug            string  opcional     (gerado automaticamente do título se omitido)
+ *   published_at    string  opcional     (ISO 8601, padrÃ£o: agora se status=published)
+ *   slug            string  opcional     (gerado automaticamente do tÃ­tulo se omitido)
  */
 export async function POST(request: Request) {
     const auth = validateApiKey(request)
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     try {
         body = await request.json()
     } catch {
-        return NextResponse.json({ error: 'JSON inválido no corpo da requisição.' }, { status: 400 })
+        return NextResponse.json({ error: 'JSON invÃ¡lido no corpo da requisiÃ§Ã£o.' }, { status: 400 })
     }
 
     const {
@@ -102,24 +102,23 @@ export async function POST(request: Request) {
         status,
         tags,
         featured_home,
-        meta_description,
-        source_url,
+  source_url,
         published_at,
         slug,
     } = body
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
-        return NextResponse.json({ error: 'O campo "title" é obrigatório.' }, { status: 400 })
+        return NextResponse.json({ error: 'O campo "title" Ã© obrigatÃ³rio.' }, { status: 400 })
     }
     if (!content || typeof content !== 'string' || content.trim() === '') {
-        return NextResponse.json({ error: 'O campo "content" é obrigatório.' }, { status: 400 })
+        return NextResponse.json({ error: 'O campo "content" Ã© obrigatÃ³rio.' }, { status: 400 })
     }
 
     const postStatus = 'draft'
     const postSlug = slug ? String(slug).trim() : generateSlug(title.trim())
 
     if (!postSlug) {
-        return NextResponse.json({ error: 'Não foi possível gerar um slug válido para este título.' }, { status: 400 })
+        return NextResponse.json({ error: 'NÃ£o foi possÃ­vel gerar um slug vÃ¡lido para este tÃ­tulo.' }, { status: 400 })
     }
 
     const postData: any = {
@@ -133,14 +132,14 @@ export async function POST(request: Request) {
         columnist_id: columnist_id || null,
         tags: Array.isArray(tags) ? tags : [],
         featured_home: Boolean(featured_home),
-        meta_description: meta_description || null,
+  :, || null,
         source_url: source_url || null,
     }
 
     if (published_at) {
         const parsedDate = new Date(published_at)
         if (isNaN(parsedDate.getTime())) {
-            return NextResponse.json({ error: 'Formato de "published_at" inválido. Use ISO 8601 (ex: 2025-01-15T10:00:00Z).' }, { status: 400 })
+            return NextResponse.json({ error: 'Formato de "published_at" invÃ¡lido. Use ISO 8601 (ex: 2025-01-15T10:00:00Z).' }, { status: 400 })
         }
         postData.published_at = parsedDate.toISOString()
     } else if (postStatus === 'published') {
@@ -157,11 +156,11 @@ export async function POST(request: Request) {
     if (error) {
         let message = error.message
         if (error.code === '23505') {
-            message = 'Já existe um post com este slug. Envie um slug diferente no campo "slug".'
+            message = 'JÃ¡ existe um post com este slug. Envie um slug diferente no campo "slug".'
         } else if (error.code === '23503') {
-            message = 'O "category_id" ou "columnist_id" informado não existe.'
+            message = 'O "category_id" ou "columnist_id" informado nÃ£o existe.'
         } else if (error.code === '22P02') {
-            message = 'Formato de dados inválido. Verifique os UUIDs de category_id e columnist_id.'
+            message = 'Formato de dados invÃ¡lido. Verifique os UUIDs de category_id e columnist_id.'
         }
         return NextResponse.json({ error: message, code: error.code }, { status: 400 })
     }
