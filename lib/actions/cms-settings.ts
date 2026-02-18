@@ -52,20 +52,31 @@ export async function updateSiteSettings(settings: Partial<SiteSettings>): Promi
         .single()
 
     if (!existing) {
-        return { success: false, error: 'Settings not found' }
-    }
+        // No settings row exists yet — create one with the provided values
+        const { error: insertError } = await supabase
+            .from('theme_settings')
+            .insert({
+                ...settings,
+                updated_at: new Date().toISOString()
+            })
 
-    const { error } = await supabase
-        .from('theme_settings')
-        .update({
-            ...settings,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', existing.id)
+        if (insertError) {
+            console.error('Error creating site settings:', insertError)
+            return { success: false, error: insertError.message }
+        }
+    } else {
+        const { error } = await supabase
+            .from('theme_settings')
+            .update({
+                ...settings,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.id)
 
-    if (error) {
-        console.error('Error updating site settings:', error)
-        return { success: false, error: error.message }
+        if (error) {
+            console.error('Error updating site settings:', error)
+            return { success: false, error: error.message }
+        }
     }
 
     revalidatePath('/cms/settings')
@@ -106,7 +117,10 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
         .getPublicUrl(`branding/${fileName}`)
 
     // Update settings with new logo URL
-    await updateSiteSettings({ logo_url: publicUrl })
+    const updateResult = await updateSiteSettings({ logo_url: publicUrl })
+    if (!updateResult.success) {
+        return { success: false, error: updateResult.error }
+    }
 
     return { success: true, url: publicUrl }
 }
@@ -143,7 +157,10 @@ export async function uploadFavicon(formData: FormData): Promise<{ success: bool
         .getPublicUrl(`branding/${fileName}`)
 
     // Update settings with new favicon URL
-    await updateSiteSettings({ site_favicon_url: publicUrl })
+    const updateResult = await updateSiteSettings({ site_favicon_url: publicUrl })
+    if (!updateResult.success) {
+        return { success: false, error: updateResult.error }
+    }
 
     return { success: true, url: publicUrl }
 }
