@@ -11,6 +11,7 @@ type LogoProps = {
   imageClassName?: string;
   priority?: boolean;
   variant?: "light" | "dark" | "white";
+  children?: React.ReactNode;
 };
 
 /**
@@ -21,6 +22,7 @@ export function Logo({
   imageClassName,
   priority = false,
   variant = "light",
+  children,
 }: LogoProps) {
   const router = useRouter();
   const [logoSrc, setLogoSrc] = useState<string>("");
@@ -67,6 +69,7 @@ export function Logo({
           "h-10 w-40 bg-gray-200 animate-pulse rounded md:h-12",
           imageClassName
         )} />
+        {children}
       </div>
     )
   }
@@ -93,6 +96,7 @@ export function Logo({
           variant === "white" && !logoSrc.startsWith('http') && "brightness-0 invert"
         )}
       />
+      {children}
     </Link>
   )
 }

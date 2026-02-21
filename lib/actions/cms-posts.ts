@@ -252,7 +252,7 @@ export async function getPostForPreview(id: string) {
         .from('posts')
         .select(`
             *,
-            category:categories(id, name, slug),
+            category:categories(id, name, title, slug),
             author:columnists(id, name, slug, bio, photo_url, instagram_url, twitter_url),
             cover_image_url
         `)

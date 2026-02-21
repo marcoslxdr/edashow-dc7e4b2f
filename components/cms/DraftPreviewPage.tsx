@@ -7,6 +7,8 @@ import Link from 'next/link'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { PostSidebar } from '@/components/post-sidebar'
+import BannerDisplay from '@/components/BannerDisplay'
+import { SocialShare } from '@/components/social-share'
 import { normalizePostContent } from '@/lib/utils/post-content'
 import { publishPost } from '@/lib/actions/cms-posts'
 import { format } from 'date-fns'
@@ -174,10 +176,22 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
 
                         <div className="container relative z-10 h-full mx-auto px-4 flex flex-col justify-end pb-12">
                             <div className="max-w-4xl">
+                                <Link href="/" className="inline-block mb-8">
+                                    <Button variant="ghost" className="text-white hover:bg-white/10 gap-2 pl-0">
+                                        <ArrowLeft className="h-4 w-4" />
+                                        Voltar
+                                    </Button>
+                                </Link>
+
                                 <div className="flex items-center gap-2 mb-6">
                                     {post.category && (
                                         <span className="px-3 py-1 bg-primary text-white rounded-full text-sm font-semibold uppercase tracking-wider">
-                                            {post.category.name}
+                                            {post.category.title || post.category.name}
+                                        </span>
+                                    )}
+                                    {post.featured_home && (
+                                        <span className="px-3 py-1 bg-yellow-400 text-yellow-950 rounded-full text-sm font-bold">
+                                            DESTAQUE
                                         </span>
                                     )}
                                 </div>
@@ -219,10 +233,22 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
                 ) : (
                     <header className="container mx-auto px-4 py-12">
                         <div className="max-w-4xl mx-auto">
+                            <Link href="/" className="inline-block mb-8">
+                                <Button variant="ghost" className="gap-2 pl-0">
+                                    <ArrowLeft className="h-4 w-4" />
+                                    Voltar
+                                </Button>
+                            </Link>
+
                             <div className="flex items-center gap-2 mb-4">
                                 {post.category && (
                                     <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
-                                        {post.category.name}
+                                        {post.category.title || post.category.name}
+                                    </span>
+                                )}
+                                {post.featured_home && (
+                                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                                        Destaque
                                     </span>
                                 )}
                             </div>
@@ -256,6 +282,11 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         {/* Coluna Principal - Conteudo do Artigo */}
                         <article className="lg:col-span-8">
+                            {/* Banner Publicitario - Topo do Artigo */}
+                            <div className="mb-8">
+                                <BannerDisplay location="article_top" />
+                            </div>
+
                             {/* Resumo do Post */}
                             {post.featured_image && post.excerpt && (
                                 <p className="text-xl text-slate-700 leading-relaxed font-serif mb-8 whitespace-pre-line">
@@ -269,6 +300,11 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
                                 dangerouslySetInnerHTML={{ __html: normalizePostContent(post.content || '') }}
                             />
 
+                            {/* Banner In-Article */}
+                            <div className="my-12">
+                                <BannerDisplay location="article_content" />
+                            </div>
+
                             {/* Tags */}
                             {post.tags && post.tags.length > 0 && (
                                 <div className="mb-8 pt-8 border-t border-slate-200">
@@ -280,7 +316,7 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
                                         {post.tags.map((tag: string, index: number) => (
                                             <span
                                                 key={index}
-                                                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full text-sm font-medium"
+                                                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full text-sm font-medium hover:bg-primary/10 hover:text-primary transition-colors"
                                             >
                                                 {tag}
                                             </span>
@@ -288,6 +324,13 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Compartilhamento Social */}
+                            <SocialShare
+                                url={`/posts/${post.slug}`}
+                                title={post.title}
+                                description={post.excerpt}
+                            />
 
                             {/* Informacoes do Autor */}
                             {post.author && (
@@ -353,7 +396,7 @@ export function DraftPreviewPage({ post, sponsors }: DraftPreviewPageProps) {
 
                         {/* Sidebar */}
                         <aside className="lg:col-span-4">
-                            <div className="sticky top-20">
+                            <div className="sticky top-6">
                                 <PostSidebar sponsors={sponsors} />
                             </div>
                         </aside>
