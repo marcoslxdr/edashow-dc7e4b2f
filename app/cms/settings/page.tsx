@@ -2,16 +2,15 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Settings, Palette, Search, Share2, ImageIcon, Users } from 'lucide-react'
+import { Settings, Search, Share2, ImageIcon, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GeneralSettingsTab } from '@/components/cms/settings/GeneralSettingsTab'
-import { BrandingSettingsTab } from '@/components/cms/settings/BrandingSettingsTab'
 import { SEOSettingsTab } from '@/components/cms/settings/SEOSettingsTab'
 import { SocialSettingsTab } from '@/components/cms/settings/SocialSettingsTab'
 import { ImageSettingsTab } from '@/components/cms/settings/ImageSettingsTab'
 import { UsersSettingsTab } from '@/components/cms/settings/UsersSettingsTab'
 
-type TabId = 'general' | 'branding' | 'seo' | 'social' | 'images' | 'users'
+type TabId = 'general' | 'seo' | 'social' | 'images' | 'users'
 
 interface Tab {
     id: TabId
@@ -22,7 +21,6 @@ interface Tab {
 
 const tabs: Tab[] = [
     { id: 'general', label: 'Geral', icon: Settings, component: GeneralSettingsTab },
-    { id: 'branding', label: 'Branding', icon: Palette, component: BrandingSettingsTab },
     { id: 'seo', label: 'SEO & Analytics', icon: Search, component: SEOSettingsTab },
     { id: 'social', label: 'Redes Sociais', icon: Share2, component: SocialSettingsTab },
     { id: 'images', label: 'Imagens', icon: ImageIcon, component: ImageSettingsTab },
