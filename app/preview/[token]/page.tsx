@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import { getPostByPreviewToken } from '@/lib/actions/cms-preview'
+import { getSponsors } from '@/lib/supabase/api'
 import { PreviewContent } from './preview-content'
 
 export const dynamic = 'force-dynamic'
@@ -23,11 +24,14 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
         notFound()
     }
 
+    const sponsors = await getSponsors({ active: true })
+
     return (
         <PreviewContent
             post={result.post}
             tokenData={result.token}
             token={token}
+            sponsors={sponsors}
         />
     )
 }

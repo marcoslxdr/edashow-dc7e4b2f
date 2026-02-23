@@ -104,15 +104,17 @@ export async function submitPreviewReview(
 ) {
     const supabase = createAdminClient()
 
-    // Get logged-in user info
-    const authClient = await createClient()
-    const { data: { user } } = await authClient.auth.getUser()
-
-    if (!user) {
-        throw new Error('Você precisa estar logado para revisar este post.')
+    // Try to get logged-in user info (optional - anonymous reviews allowed)
+    let reviewerName = 'Revisor externo'
+    try {
+        const authClient = await createClient()
+        const { data: { user } } = await authClient.auth.getUser()
+        if (user) {
+            reviewerName = user.user_metadata?.full_name || user.email || 'Revisor'
+        }
+    } catch {
+        // Anonymous review - use default name
     }
-
-    const reviewerName = user.user_metadata?.full_name || user.email || 'Revisor'
 
     // Validate the token exists and is still pending
     const { data: tokenData, error: tokenError } = await supabase
