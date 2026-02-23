@@ -7,7 +7,7 @@ export default function Template({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   
   // Não aplicar animações em rotas do admin do Payload CMS
-  if (pathname?.startsWith('/admin')) {
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/preview')) {
     return <>{children}</>
   }
   

@@ -14,6 +14,7 @@ import {
     Eye
 } from 'lucide-react'
 import { CoverImageGenerator, AudioTranscriber, AIToolsPanel } from './ai'
+import { ShareDraftButton } from './ShareDraftButton'
 import { Button } from '@/components/ui/button'
 import { UnifiedMediumEditor } from './UnifiedMediumEditor'
 import { SettingsDrawer } from './SettingsDrawer'
@@ -293,6 +294,11 @@ export function PostEditor({ post, categories, columnists }: PostEditorProps) {
                             >
                                 <ExternalLink className="w-5 h-5" />
                             </Button>
+                        )}
+
+                        {/* Share Draft Button */}
+                        {formData.id !== 'new' && (
+                            <ShareDraftButton postId={formData.id} />
                         )}
 
                         {/* Settings Button */}

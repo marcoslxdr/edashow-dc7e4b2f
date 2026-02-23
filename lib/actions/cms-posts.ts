@@ -264,6 +264,7 @@ export async function getPostForPreview(id: string) {
         return null
     }
 
+
     return {
         ...data,
         featured_image: data.cover_image_url

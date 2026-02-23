@@ -40,6 +40,9 @@ const nextConfig = {
     }
     return config
   },
+
+  // Turbopack config (Next.js 16+ uses Turbopack by default)
+  turbopack: {},
 }
 
 export default nextConfig
