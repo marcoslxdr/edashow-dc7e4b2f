@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { createClient } from '@/lib/supabase/client'
+
 import Link from 'next/link'
 
 export default function CMSDashboard() {
@@ -29,30 +29,21 @@ export default function CMSDashboard() {
 
     useEffect(() => {
         async function fetchStats() {
-            const supabase = createClient()
-
-            const [
-                { count: postsCount },
-                { count: eventsCount },
-                { count: sponsorsCount },
-                { count: subscribersCount },
-                { data: latestPosts }
-            ] = await Promise.all([
-                supabase.from('posts').select('*', { count: 'exact', head: true }),
-                supabase.from('events').select('*', { count: 'exact', head: true }),
-                supabase.from('sponsors').select('*', { count: 'exact', head: true }),
-                supabase.from('newsletter_subscribers').select('*', { count: 'exact', head: true }),
-                supabase.from('posts').select('id, title, status, created_at, slug, cover_image_url').order('created_at', { ascending: false }).limit(5)
-            ])
-
-            setStats({
-                posts: postsCount || 0,
-                events: eventsCount || 0,
-                sponsors: sponsorsCount || 0,
-                subscribers: subscribersCount || 0
-            })
-            setRecentPosts(latestPosts || [])
-            setLoading(false)
+            try {
+                const res = await fetch('/api/cms/stats')
+                const data = await res.json()
+                setStats({
+                    posts: data.posts || 0,
+                    events: data.events || 0,
+                    sponsors: data.sponsors || 0,
+                    subscribers: data.subscribers || 0
+                })
+                setRecentPosts(data.recentPosts || [])
+            } catch (error) {
+                console.error('Error fetching stats:', error)
+            } finally {
+                setLoading(false)
+            }
         }
 
         fetchStats()

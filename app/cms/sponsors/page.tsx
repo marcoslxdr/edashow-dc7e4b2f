@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DataTable } from '@/components/cms/DataTable'
 import { saveSponsor, deleteSponsor, toggleSponsorActive, uploadSponsorLogo } from '@/lib/actions/cms-sponsors'
-import { createClient } from '@/lib/supabase/client'
+
 
 interface Sponsor {
     id: string
@@ -44,11 +44,8 @@ export default function CMSSponsorsPage() {
 
     const fetchSponsors = async () => {
         setLoading(true)
-        const supabase = createClient()
-        const { data } = await supabase
-            .from('sponsors')
-            .select('*')
-            .order('display_order', { ascending: true })
+        const res = await fetch('/api/cms/sponsors-list')
+        const { data } = await res.json()
 
         // Normalize logo field names
         const normalizedData = (data || []).map(s => ({

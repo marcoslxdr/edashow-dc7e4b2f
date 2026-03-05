@@ -1,42 +1,42 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 import { revalidatePath } from 'next/cache'
 
 export async function getPost(id: string) {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-        .from('posts')
-        .select('*, categories(*), columnists(*)')
-        .eq('id', id)
-        .single()
-
-    if (error) throw error
-    return data
+    const rows = await sql`
+        SELECT p.*, 
+            cat.id as cat_id, cat.name as cat_name, cat.slug as cat_slug,
+            col.id as col_id, col.name as col_name, col.slug as col_slug
+        FROM posts p
+        LEFT JOIN categories cat ON cat.id = p.category_id
+        LEFT JOIN columnists col ON col.id = p.author_id
+        WHERE p.id = ${id}
+        LIMIT 1
+    `
+    if (!rows || rows.length === 0) return null
+    const row = rows[0]
+    return {
+        ...row,
+        categories: row.cat_id ? { id: row.cat_id, name: row.cat_name, slug: row.cat_slug } : null,
+        columnists: row.col_id ? { id: row.col_id, name: row.col_name, slug: row.col_slug } : null,
+    }
 }
 
 export async function savePost(data: any) {
-    // Use admin client for CMS operations to bypass RLS
-    const supabase = await createAdminClient()
     const { id, categories, columnists, ...postData } = data
 
-    // Normalize data types for PostgreSQL
     const normalizedData: any = { ...postData }
 
-    // Convert published_at from date string (YYYY-MM-DD) to ISO timestamp if provided
     if (normalizedData.published_at) {
         const dateStr = normalizedData.published_at
-        // If it's just a date string (YYYY-MM-DD), convert to timestamp
         if (dateStr.length === 10 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            // Create a date at midnight UTC and convert to ISO string
             normalizedData.published_at = new Date(dateStr + 'T00:00:00.000Z').toISOString()
         } else if (typeof dateStr === 'string') {
-            // If it's already a timestamp, ensure it's valid
             normalizedData.published_at = new Date(dateStr).toISOString()
         }
     }
 
-    // Convert empty strings to null for UUID fields
     if (normalizedData.category_id === '' || normalizedData.category_id === null) {
         normalizedData.category_id = null
     }
@@ -44,24 +44,19 @@ export async function savePost(data: any) {
         normalizedData.columnist_id = null
     }
 
-    // Ensure tags is an array
     if (normalizedData.tags && !Array.isArray(normalizedData.tags)) {
         normalizedData.tags = []
     }
 
-    // Ensure boolean fields are actual booleans
     if (normalizedData.featured_home !== undefined) {
         normalizedData.featured_home = Boolean(normalizedData.featured_home)
     }
 
-    // Ensure status is valid
     if (normalizedData.status && !['draft', 'published', 'archived'].includes(normalizedData.status)) {
         normalizedData.status = 'draft'
     }
 
-    // Ensure slug exists and is valid (generate from title if missing)
     if (!normalizedData.slug && normalizedData.title) {
-        // Simple slug generation if needed
         normalizedData.slug = normalizedData.title
             .toLowerCase()
             .normalize('NFD')
@@ -70,70 +65,57 @@ export async function savePost(data: any) {
             .replace(/^-+|-+$/g, '')
     }
 
-    // Ensure required fields for new posts
     if ((id === 'new' || !id) && !normalizedData.slug) {
         throw new Error('Slug é obrigatório para criar um novo post')
     }
 
-    let result
-    const operation = (id === 'new' || !id) ? 'insert' : 'update'
-
-    console.log('[savePost] Operação:', operation)
     console.log('[savePost] Dados normalizados:', JSON.stringify(normalizedData, null, 2))
 
-    if (id === 'new' || !id) {
-        result = await supabase.from('posts').insert([normalizedData]).select().single()
-    } else {
-        result = await supabase.from('posts').update(normalizedData).eq('id', id).select().single()
-    }
-
-    if (result.error) {
-        console.error('[savePost] Erro do Supabase:', result.error)
-        console.error('[savePost] Código:', result.error.code)
-        console.error('[savePost] Mensagem:', result.error.message)
-        console.error('[savePost] Detalhes:', result.error.details)
-        console.error('[savePost] Hint:', result.error.hint)
-
-        // Melhorar mensagem de erro para o usuário
-        let userMessage = result.error.message || 'Erro desconhecido'
-
-        // Adicionar contexto baseado no código de erro
-        if (result.error.code === '42501') {
-            userMessage = 'Permissão negada. Verifique as políticas de segurança (RLS) do Supabase.'
-        } else if (result.error.code === '23505') {
-            userMessage = 'Já existe um post com este slug ou identificador único.'
-        } else if (result.error.code === '23503') {
-            userMessage = 'Categoria ou colunista referenciado não existe.'
-        } else if (result.error.code === '23502') {
-            userMessage = 'Campo obrigatório está faltando.'
-        } else if (result.error.code === '22P02') {
-            userMessage = 'Formato de dados inválido. Verifique os tipos dos campos.'
+    try {
+        let result
+        if (id === 'new' || !id) {
+            const keys = Object.keys(normalizedData)
+            const values = Object.values(normalizedData)
+            const cols = keys.join(', ')
+            const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ')
+            const rows = await sql(
+                `INSERT INTO posts (${cols}) VALUES (${placeholders}) RETURNING *`,
+                values
+            )
+            result = rows[0]
+        } else {
+            const keys = Object.keys(normalizedData)
+            const values = Object.values(normalizedData)
+            const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+            const rows = await sql(
+                `UPDATE posts SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
+                [...values, id]
+            )
+            result = rows[0]
         }
 
-        const error = new Error(userMessage) as any
-        error.code = result.error.code
-        error.details = result.error.details
-        error.hint = result.error.hint
-        throw error
+        revalidatePath('/cms/posts')
+        revalidatePath('/')
+        if (result?.slug) revalidatePath(`/posts/${result.slug}`)
+        return result
+    } catch (error: any) {
+        console.error('[savePost] Erro:', error)
+        let userMessage = error.message || 'Erro desconhecido'
+        if (error.code === '23505') userMessage = 'Já existe um post com este slug.'
+        if (error.code === '23503') userMessage = 'Categoria ou colunista referenciado não existe.'
+        if (error.code === '23502') userMessage = 'Campo obrigatório está faltando.'
+        const enhancedError = new Error(userMessage) as any
+        enhancedError.code = error.code
+        throw enhancedError
     }
-
-    revalidatePath('/cms/posts')
-    revalidatePath('/')
-    revalidatePath(`/posts/${result.data.slug}`)
-    return result.data
 }
 
 export async function autoSavePost(data: any) {
-    // Use admin client for CMS operations to bypass RLS
-    const supabase = await createAdminClient()
     const { id, categories, columnists, ...postData } = data
+    if (!id || id === 'new') return null
 
-    if (!id || id === 'new') return null // Can't auto-save a new post without ID
-
-    // Normalize data types for PostgreSQL (same as savePost)
     const normalizedData: any = { ...postData }
 
-    // Convert published_at from date string to ISO timestamp if provided
     if (normalizedData.published_at) {
         const dateStr = normalizedData.published_at
         if (dateStr.length === 10 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -143,130 +125,65 @@ export async function autoSavePost(data: any) {
         }
     }
 
-    // Convert empty strings to null for UUID fields
-    if (normalizedData.category_id === '' || normalizedData.category_id === null) {
-        normalizedData.category_id = null
-    }
-    if (normalizedData.columnist_id === '' || normalizedData.columnist_id === null) {
-        normalizedData.columnist_id = null
-    }
+    if (normalizedData.category_id === '') normalizedData.category_id = null
+    if (normalizedData.columnist_id === '') normalizedData.columnist_id = null
+    if (normalizedData.tags && !Array.isArray(normalizedData.tags)) normalizedData.tags = []
 
-    // Ensure tags is an array
-    if (normalizedData.tags && !Array.isArray(normalizedData.tags)) {
-        normalizedData.tags = []
-    }
-
-    const { data: result, error } = await supabase
-        .from('posts')
-        .update(normalizedData)
-        .eq('id', id)
-        .select()
-        .single()
-
-    if (error) throw error
-    return result
+    const keys = Object.keys(normalizedData)
+    const values = Object.values(normalizedData)
+    const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+    const rows = await sql(
+        `UPDATE posts SET ${setClause} WHERE id = $${keys.length + 1} RETURNING *`,
+        [...values, id]
+    )
+    return rows[0] || null
 }
 
-
 export async function deletePost(id: string) {
-    // Use admin client for CMS operations to bypass RLS
-    const supabase = await createAdminClient()
-
-    console.log('[deletePost] Tentando excluir post com ID:', id)
-
-    const { error } = await supabase.from('posts').delete().eq('id', id)
-
-    if (error) {
-        console.error('[deletePost] Erro do Supabase:', error)
-        console.error('[deletePost] Código:', error.code)
-        console.error('[deletePost] Mensagem:', error.message)
-        console.error('[deletePost] Detalhes:', error.details)
-        console.error('[deletePost] Hint:', error.hint)
-
-        // Melhorar mensagem de erro para o usuário
+    console.log('[deletePost] Excluindo post:', id)
+    try {
+        await sql`DELETE FROM posts WHERE id = ${id}`
+        revalidatePath('/cms/posts')
+        revalidatePath('/')
+    } catch (error: any) {
+        console.error('[deletePost] Erro:', error)
         let userMessage = error.message || 'Erro desconhecido'
-
-        // Adicionar contexto baseado no código de erro
-        if (error.code === '23503') {
-            userMessage = 'Não é possível excluir este post pois existem registros relacionados. Remova as referências primeiro.'
-        } else if (error.code === '42501') {
-            userMessage = 'Permissão negada. Verifique as políticas de segurança (RLS) do Supabase.'
-        } else if (error.code === '22P02') {
-            userMessage = 'ID inválido fornecido.'
-        }
-
-        const enhancedError = new Error(userMessage) as any
-        enhancedError.code = error.code
-        enhancedError.details = error.details
-        enhancedError.hint = error.hint
-        throw enhancedError
+        if (error.code === '23503') userMessage = 'Não é possível excluir este post pois existem registros relacionados.'
+        throw new Error(userMessage)
     }
-
-    console.log('[deletePost] Post excluído com sucesso:', id)
-    revalidatePath('/cms/posts')
-    revalidatePath('/')
 }
 
 export async function deleteMultiplePosts(ids: string[]) {
-    // Use admin client for CMS operations to bypass RLS
-    const supabase = await createAdminClient()
-
-    console.log('[deleteMultiplePosts] Tentando excluir posts com IDs:', ids)
-
-    const { error } = await supabase.from('posts').delete().in('id', ids)
-
-    if (error) {
-        console.error('[deleteMultiplePosts] Erro do Supabase:', error)
-        console.error('[deleteMultiplePosts] Código:', error.code)
-        console.error('[deleteMultiplePosts] Mensagem:', error.message)
-        console.error('[deleteMultiplePosts] Detalhes:', error.details)
-        console.error('[deleteMultiplePosts] Hint:', error.hint)
-
-        // Melhorar mensagem de erro para o usuário
-        let userMessage = error.message || 'Erro desconhecido'
-
-        // Adicionar contexto baseado no código de erro
-        if (error.code === '23503') {
-            userMessage = 'Não é possível excluir um ou mais posts pois existem registros relacionados. Remova as referências primeiro.'
-        } else if (error.code === '42501') {
-            userMessage = 'Permissão negada. Verifique as políticas de segurança (RLS) do Supabase.'
-        } else if (error.code === '22P02') {
-            userMessage = 'IDs inválidos fornecidos.'
-        }
-
-        const enhancedError = new Error(userMessage) as any
-        enhancedError.code = error.code
-        enhancedError.details = error.details
-        enhancedError.hint = error.hint
-        throw enhancedError
+    console.log('[deleteMultiplePosts] Excluindo posts:', ids)
+    try {
+        await sql`DELETE FROM posts WHERE id = ANY(${ids}::uuid[])`
+        revalidatePath('/cms/posts')
+        revalidatePath('/')
+    } catch (error: any) {
+        console.error('[deleteMultiplePosts] Erro:', error)
+        throw new Error(error.message || 'Erro ao excluir posts')
     }
-
-    console.log('[deleteMultiplePosts] Posts excluídos com sucesso:', ids)
-    revalidatePath('/cms/posts')
-    revalidatePath('/')
 }
 
 export async function getPostForPreview(id: string) {
-    const supabase = await createAdminClient()
-    const { data, error } = await supabase
-        .from('posts')
-        .select(`
-            *,
-            category:categories(id, name, slug),
-            author:columnists(id, name, slug, bio, photo_url, instagram_url, twitter_url),
-            cover_image_url
-        `)
-        .eq('id', id)
-        .single()
-
-    if (error) {
-        console.error(`[getPostForPreview] Erro ao buscar post ${id}:`, error)
-        return null
-    }
-
-
+    const rows = await sql`
+        SELECT p.*,
+            cat.id as cat_id, cat.name as cat_name, cat.slug as cat_slug,
+            col.id as col_id, col.name as col_name, col.slug as col_slug,
+            col.bio as col_bio, col.photo_url as col_photo_url,
+            col.instagram_url as col_instagram_url, col.twitter_url as col_twitter_url
+        FROM posts p
+        LEFT JOIN categories cat ON cat.id = p.category_id
+        LEFT JOIN columnists col ON col.id = p.author_id
+        WHERE p.id = ${id}
+        LIMIT 1
+    `
+    if (!rows || rows.length === 0) return null
+    const data = rows[0]
     return {
         ...data,
+        category: data.cat_id ? { id: data.cat_id, name: data.cat_name, slug: data.cat_slug } : null,
+        author: data.col_id ? { id: data.col_id, name: data.col_name, slug: data.col_slug, bio: data.col_bio, photo_url: data.col_photo_url, instagram_url: data.col_instagram_url, twitter_url: data.col_twitter_url } : null,
         featured_image: data.cover_image_url
             ? { url: data.cover_image_url, alt_text: data.title || 'Imagem do post' }
             : null,
@@ -274,53 +191,37 @@ export async function getPostForPreview(id: string) {
 }
 
 export async function publishPost(id: string) {
-    const supabase = await createAdminClient()
+    const current = await sql`SELECT published_at, slug FROM posts WHERE id = ${id} LIMIT 1`
+    const currentPost = current[0]
 
-    // Buscar post atual para verificar published_at
-    const { data: current } = await supabase
-        .from('posts')
-        .select('published_at, slug')
-        .eq('id', id)
-        .single()
-
-    const updateData: any = {
-        status: 'published',
+    let result
+    if (!currentPost?.published_at) {
+        result = await sql`
+            UPDATE posts SET status = 'published', published_at = ${new Date().toISOString()}
+            WHERE id = ${id} RETURNING slug
+        `
+    } else {
+        result = await sql`
+            UPDATE posts SET status = 'published'
+            WHERE id = ${id} RETURNING slug
+        `
     }
 
-    // Só define published_at se ainda não tiver
-    if (!current?.published_at) {
-        updateData.published_at = new Date().toISOString()
-    }
-
-    const { data, error } = await supabase
-        .from('posts')
-        .update(updateData)
-        .eq('id', id)
-        .select('slug')
-        .single()
-
-    if (error) {
-        console.error('[publishPost] Erro:', error)
-        throw new Error(error.message || 'Erro ao publicar post')
-    }
+    const data = result[0]
+    if (!data) throw new Error('Post não encontrado')
 
     revalidatePath('/cms/posts')
     revalidatePath('/')
     revalidatePath(`/posts/${data.slug}`)
-
     return data
 }
 
 export async function getCategories() {
-    const supabase = await createClient()
-    const { data, error } = await supabase.from('categories').select('*').order('name')
-    if (error) throw error
+    const data = await sql`SELECT * FROM categories ORDER BY name`
     return data
 }
 
 export async function getColumnists() {
-    const supabase = await createClient()
-    const { data, error } = await supabase.from('columnists').select('*').order('name')
-    if (error) throw error
+    const data = await sql`SELECT * FROM columnists ORDER BY name`
     return data
 }

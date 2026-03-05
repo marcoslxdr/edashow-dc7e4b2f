@@ -4,7 +4,7 @@
  */
 
 import sharp from 'sharp'
-import { createClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 
 export interface ImageSettings {
     id: string
@@ -37,19 +37,13 @@ export interface OptimizeOptions {
  * Get image optimization settings from database
  */
 export async function getImageSettings(): Promise<ImageSettings | null> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('image_settings')
-        .select('*')
-        .single()
-
-    if (error) {
+    try {
+        const rows = await sql\`SELECT * FROM image_settings LIMIT 1\`
+        return rows[0] as ImageSettings || null
+    } catch (error) {
         console.error('Error fetching image settings:', error)
         return null
     }
-
-    return data as ImageSettings
 }
 
 /**

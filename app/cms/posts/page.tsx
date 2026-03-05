@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { Plus, Search, RefreshCw, FileText, Calendar, Edit3, Trash2, ExternalLink, CheckSquare, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { createClient } from '@/lib/supabase/client'
+
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { deletePost, deleteMultiplePosts } from '@/lib/actions/cms-posts'
@@ -33,25 +33,16 @@ export default function CMSPostsPage() {
 
     const fetchPosts = async () => {
         setLoading(true)
-        const supabase = createClient()
-
-        let query = supabase
-            .from('posts')
-            .select('*, categories(name)')
-            .order('created_at', { ascending: false })
-
-        if (statusFilter !== 'all') {
-            query = query.eq('status', statusFilter)
-        }
-
-        const { data, error } = await query
-
-        if (error) {
+        try {
+            const params = statusFilter !== 'all' ? `?status=${statusFilter}` : ''
+            const res = await fetch(`/api/cms/posts${params}`)
+            const data = await res.json()
+            setPosts(data.posts || [])
+        } catch (error) {
             console.error('Erro ao buscar posts:', error)
-        } else {
-            setPosts(data || [])
+        } finally {
+            setLoading(false)
         }
-        setLoading(false)
     }
 
     useEffect(() => {

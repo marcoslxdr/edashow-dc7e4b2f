@@ -1,7 +1,7 @@
 import { ContextConfig, Persona, KnowledgeBlock } from './types';
 import { EdaPro, EdaRaiz } from './personas';
 import { BrandVoice, SeoRules } from './knowledge/brand-voice';
-import { createAdminClient } from '@/lib/supabase/server';
+import { sql } from '@/lib/db/client';
 
 const LOCAL_PERSONAS: Record<string, Persona> = {
   'eda-pro': EdaPro,
@@ -20,15 +20,9 @@ export class ContextAssembler {
    */
   static async getPersona(slug: string): Promise<Persona> {
     try {
-      const supabase = createAdminClient();
-      const { data, error } = await supabase
-        .from('ai_personas')
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .single();
-
-      if (data && !error) {
+      const rows = await sql`SELECT * FROM ai_personas WHERE slug = ${slug} AND is_active = true LIMIT 1`
+      const data = rows[0]
+      if (data) {
         return {
           id: data.slug,
           name: data.name,
@@ -51,15 +45,9 @@ export class ContextAssembler {
    */
   static async getKnowledge(slug: string): Promise<KnowledgeBlock | null> {
     try {
-      const supabase = createAdminClient();
-      const { data, error } = await supabase
-        .from('ai_knowledge_blocks')
-        .select('*')
-        .eq('slug', slug)
-        .eq('is_active', true)
-        .single();
-
-      if (data && !error) {
+      const rows = await sql`SELECT * FROM ai_knowledge_blocks WHERE slug = ${slug} AND is_active = true LIMIT 1`
+      const data = rows[0]
+      if (data) {
         return {
           id: data.slug,
           content: data.content,

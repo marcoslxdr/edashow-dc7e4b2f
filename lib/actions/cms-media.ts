@@ -1,26 +1,20 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
+import { put, del } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 import { processImageWithSettings, getMimeType, getExtension } from '@/lib/images/image-optimizer'
 
 export async function getMedia() {
-    const supabase = await createClient()
-    const { data, error } = await supabase
-        .from('media')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-    if (error) throw error
+    const data = await sql`
+        SELECT * FROM media ORDER BY created_at DESC
+    `
     return data
 }
 
 export async function uploadMedia(formData: FormData) {
-    // Use admin client to bypass RLS
-    const supabase = await createAdminClient()
     const file = formData.get('file') as File
 
-    // Check if it's an image
     const isImage = file.type.startsWith('image/')
 
     let fileBuffer: Buffer
@@ -28,28 +22,21 @@ export async function uploadMedia(formData: FormData) {
     let finalMimeType: string
     let finalSize: number
 
-    // Convert File to Buffer
     const arrayBuffer = await file.arrayBuffer()
     const originalBuffer = Buffer.from(arrayBuffer)
 
     if (isImage) {
-        // Try to optimize the image
         try {
             const optimized = await processImageWithSettings(originalBuffer)
 
             if (optimized) {
-                // Use optimized image
                 fileBuffer = optimized.buffer
                 finalMimeType = getMimeType(optimized.format)
                 finalSize = fileBuffer.length
-
-                // Generate new filename with correct extension
                 const baseName = file.name.replace(/\.[^.]+$/, '')
                 finalFilename = `${Date.now()}-${baseName}.${getExtension(optimized.format)}`
-
                 console.log(`Image optimized: ${file.name} (${file.size} bytes) -> ${finalFilename} (${finalSize} bytes)`)
             } else {
-                // Optimization disabled or failed, use original
                 fileBuffer = originalBuffer
                 finalFilename = `${Date.now()}-${file.name}`
                 finalMimeType = file.type
@@ -57,74 +44,41 @@ export async function uploadMedia(formData: FormData) {
             }
         } catch (error) {
             console.error('Error optimizing image:', error)
-            // Fallback to original
             fileBuffer = originalBuffer
             finalFilename = `${Date.now()}-${file.name}`
             finalMimeType = file.type
             finalSize = file.size
         }
     } else {
-        // Non-image files, use as-is
         fileBuffer = originalBuffer
         finalFilename = `${Date.now()}-${file.name}`
         finalMimeType = file.type
         finalSize = file.size
     }
 
-    // 1. Upload file to storage
-    const { data: storageData, error: storageError } = await supabase.storage
-        .from('edashow-media')
-        .upload(finalFilename, fileBuffer, {
-            contentType: finalMimeType
-        })
+    // Upload to Vercel Blob
+    const blob = await put(finalFilename, fileBuffer, {
+        access: 'public',
+        contentType: finalMimeType,
+    })
 
-    if (storageError) throw storageError
-
-    // 2. Get public URL
-    const { data: { publicUrl } } = supabase.storage
-        .from('edashow-media')
-        .getPublicUrl(finalFilename)
-
-    // 3. Save reference in media table
-    const { data: mediaData, error: mediaError } = await supabase
-        .from('media')
-        .insert([
-            {
-                filename: finalFilename,
-                url: publicUrl,
-                mime_type: finalMimeType,
-                filesize: finalSize,
-                title: file.name
-            }
-        ])
-        .select()
-        .single()
-
-    if (mediaError) throw mediaError
+    // Save reference in media table
+    const rows = await sql`
+        INSERT INTO media (filename, url, mime_type, filesize, title)
+        VALUES (${finalFilename}, ${blob.url}, ${finalMimeType}, ${finalSize}, ${file.name})
+        RETURNING *
+    `
 
     revalidatePath('/cms/media')
-    return mediaData
+    return rows[0]
 }
 
+export async function deleteMedia(id: string, url: string) {
+    // Delete from Vercel Blob
+    await del(url)
 
-export async function deleteMedia(id: string, filename: string) {
-    // Use admin client to bypass RLS
-    const supabase = await createAdminClient()
-
-    // 1. Delete from storage
-    const { error: storageError } = await supabase.storage
-        .from('edashow-media')
-        .remove([filename])
-
-    if (storageError) throw storageError
-
-    // 2. Delete from database
-    const { error: dbError } = await supabase
-        .from('media')
-        .delete()
-        .eq('id', id)
-
-    if (dbError) throw dbError
+    // Delete from database
+    await sql`DELETE FROM media WHERE id = ${id}`
 
     revalidatePath('/cms/media')
 }

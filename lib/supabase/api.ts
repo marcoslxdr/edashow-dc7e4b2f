@@ -1,4 +1,4 @@
-import { getPublicSupabaseClient } from './public-client'
+import { sql } from '@/lib/db/client'
 
 export async function getPosts(options: {
     limit?: number
@@ -8,190 +8,240 @@ export async function getPosts(options: {
     status?: 'published' | 'draft'
     featured?: boolean
 } = {}) {
-    const supabase = getPublicSupabaseClient()
-    let query = supabase
-        .from('posts')
-        .select(`
-      *,
-      category:categories(id, name, slug),
-      author:columnists(id, name, slug, photo_url, bio),
-      cover_image_url
-    `)
-        .order('published_at', { ascending: false })
+    try {
+        const conditions: string[] = []
+        const params: unknown[] = []
+        let paramIdx = 1
 
-    if (options.limit) {
-        query = query.range(options.offset || 0, (options.offset || 0) + options.limit - 1)
-    }
+        if (options.status) {
+            conditions.push(`p.status = $${paramIdx++}`)
+            params.push(options.status)
+        }
 
-    if (options.status) {
-        query = query.eq('status', options.status)
-    }
+        if (options.featured !== undefined) {
+            conditions.push(`p.featured_home = $${paramIdx++}`)
+            params.push(options.featured)
+        }
 
-    if (options.featured !== undefined) {
-        query = query.eq('featured_home', options.featured)
-    }
+        if (options.category) {
+            conditions.push(`cat.slug = $${paramIdx++}`)
+            params.push(options.category)
+        }
 
-    if (options.category) {
-        // Buscar o ID da categoria pelo slug primeiro se necessário, 
-        // ou usar join filtrado. No Supabase, se categories é uma tabela relacionada:
-        query = query.filter('categories.slug', 'eq', options.category)
-    }
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    const { data, error } = await query
-    if (error) {
-        console.error('Error fetching posts from Supabase:', error)
+        let limitClause = ''
+        if (options.limit) {
+            const offset = options.offset || 0
+            limitClause = `LIMIT $${paramIdx++} OFFSET $${paramIdx++}`
+            params.push(options.limit, offset)
+        }
+
+        // Build query string dynamically for parameterized queries
+        const query = `
+            SELECT
+                p.*,
+                cat.id as cat_id, cat.name as cat_name, cat.slug as cat_slug,
+                col.id as col_id, col.name as col_name, col.slug as col_slug,
+                col.photo_url as col_photo_url, col.bio as col_bio
+            FROM posts p
+            LEFT JOIN categories cat ON cat.id = p.category_id
+            LEFT JOIN columnists col ON col.id = p.author_id
+            ${whereClause}
+            ORDER BY p.published_at DESC
+            ${limitClause}
+        `
+
+        const data = await sql(query, params)
+        return (data || []).map(normalizeRowData)
+    } catch (error) {
+        console.error('Error fetching posts:', error)
         return []
     }
-    return (data || []).map(normalizePostData)
 }
 
 export async function getPostBySlug(slug: string) {
-    const supabase = getPublicSupabaseClient()
-    const { data, error } = await supabase
-        .from('posts')
-        .select(`
-      *,
-      category:categories(id, name, slug),
-      author:columnists(id, name, slug, bio, photo_url, instagram_url, twitter_url),
-      cover_image_url
-    `)
-        .eq('slug', slug)
-        .single()
+    try {
+        const data = await sql`
+            SELECT
+                p.*,
+                cat.id as cat_id, cat.name as cat_name, cat.slug as cat_slug,
+                col.id as col_id, col.name as col_name, col.slug as col_slug,
+                col.photo_url as col_photo_url, col.bio as col_bio,
+                col.instagram_url as col_instagram_url, col.twitter_url as col_twitter_url
+            FROM posts p
+            LEFT JOIN categories cat ON cat.id = p.category_id
+            LEFT JOIN columnists col ON col.id = p.author_id
+            WHERE p.slug = ${slug}
+            LIMIT 1
+        `
 
-    if (error) {
+        if (!data || data.length === 0) return null
+        return normalizeRowData(data[0])
+    } catch (error) {
         console.error(`Error fetching post ${slug}:`, error)
         return null
     }
-
-    return normalizePostData(data)
 }
 
 export async function getCategories() {
-    const supabase = getPublicSupabaseClient()
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('display_order', { ascending: true })
-
-    if (error) {
+    try {
+        const data = await sql`
+            SELECT * FROM categories ORDER BY display_order ASC
+        `
+        return data || []
+    } catch (error) {
         console.error('Error fetching categories:', error)
         return []
     }
-    return data || []
 }
 
 export async function getSponsors(options: { active?: boolean } = {}) {
-    const supabase = getPublicSupabaseClient()
-
-    let query = supabase.from('sponsors').select('*').order('display_order', { ascending: true })
-
-    if (options.active) query = query.eq('active', true)
-
-
-    const { data, error } = await query
-    if (error) {
+    try {
+        let data
+        if (options.active) {
+            data = await sql`
+                SELECT * FROM sponsors WHERE active = true ORDER BY display_order ASC
+            `
+        } else {
+            data = await sql`
+                SELECT * FROM sponsors ORDER BY display_order ASC
+            `
+        }
+        return data || []
+    } catch (error) {
         console.error('Error fetching sponsors:', error)
         return []
     }
-    return data || []
 }
 
 export async function getEvents(options: { limit?: number, status?: string } = {}) {
-    const supabase = getPublicSupabaseClient()
-    let query = supabase.from('events').select('*').order('event_date', { ascending: true })
-
-    if (options.limit) query = query.limit(options.limit)
-    if (options.status) query = query.eq('status', options.status)
-
-    const { data, error } = await query
-    if (error) {
+    try {
+        let data
+        if (options.limit && options.status) {
+            data = await sql`
+                SELECT * FROM events
+                WHERE status = ${options.status}
+                ORDER BY event_date ASC
+                LIMIT ${options.limit}
+            `
+        } else if (options.limit) {
+            data = await sql`
+                SELECT * FROM events ORDER BY event_date ASC LIMIT ${options.limit}
+            `
+        } else if (options.status) {
+            data = await sql`
+                SELECT * FROM events WHERE status = ${options.status} ORDER BY event_date ASC
+            `
+        } else {
+            data = await sql`
+                SELECT * FROM events ORDER BY event_date ASC
+            `
+        }
+        return data || []
+    } catch (error) {
         console.error('Error fetching events:', error)
         return []
     }
-    return data || []
 }
 
 export async function getEventBySlug(slug: string) {
-    const supabase = getPublicSupabaseClient()
-    const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('slug', slug)
-        .single()
-
-    if (error) {
+    try {
+        const data = await sql`
+            SELECT * FROM events WHERE slug = ${slug} LIMIT 1
+        `
+        if (!data || data.length === 0) return null
+        return data[0]
+    } catch (error) {
         console.error(`Error fetching event ${slug}:`, error)
         return null
     }
-    return data
 }
 
 export async function getColumnists(options: { limit?: number } = {}) {
-    const supabase = getPublicSupabaseClient()
-    let query = supabase.from('columnists').select('*')
-    if (options.limit) query = query.limit(options.limit)
-
-    const { data, error } = await query
-    if (error) {
+    try {
+        let data
+        if (options.limit) {
+            data = await sql`SELECT * FROM columnists LIMIT ${options.limit}`
+        } else {
+            data = await sql`SELECT * FROM columnists`
+        }
+        return data || []
+    } catch (error) {
         console.error('Error fetching columnists:', error)
         return []
     }
-    return data || []
 }
 
 export async function getColumnistBySlug(slug: string) {
-    const supabase = getPublicSupabaseClient()
-    const { data, error } = await supabase
-        .from('columnists')
-        .select('*')
-        .eq('slug', slug)
-        .single()
-
-    if (error) {
+    try {
+        const data = await sql`
+            SELECT * FROM columnists WHERE slug = ${slug} LIMIT 1
+        `
+        if (!data || data.length === 0) return null
+        return data[0]
+    } catch (error) {
         console.error(`Error fetching columnist ${slug}:`, error)
         return null
     }
-    return data
 }
 
 export async function getCategoryBySlug(slug: string) {
-    const supabase = getPublicSupabaseClient()
-    const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('slug', slug)
-        .single()
-
-    if (error) {
+    try {
+        const data = await sql`
+            SELECT * FROM categories WHERE slug = ${slug} LIMIT 1
+        `
+        if (!data || data.length === 0) return null
+        return data[0]
+    } catch (error) {
         console.error(`Error fetching category ${slug}:`, error)
         return null
     }
-    return data
 }
 
-export function getImageUrl(media: any, size: 'card' | 'hero' | 'full' = 'full') {
+export function getImageUrl(media: unknown, _size: 'card' | 'hero' | 'full' = 'full') {
     if (!media) return '/placeholder.jpg'
     if (typeof media === 'string') return media
-    return media.url || '/placeholder.jpg'
+    if (typeof media === 'object' && media !== null && 'url' in media) {
+        return (media as { url: string }).url || '/placeholder.jpg'
+    }
+    return '/placeholder.jpg'
 }
 
 /**
- * Normaliza dados de posts do Supabase para o formato esperado pelos componentes
- * Transforma cover_image_url (string) em featured_image (objeto)
+ * Normaliza dados de posts do banco para o formato esperado pelos componentes.
+ * Transforma cover_image_url (string) em featured_image (objeto) e
+ * reconstrói os objetos de relacionamento (category, author) a partir das colunas joinadas.
  */
-function normalizePostData(post: any): any {
-    if (!post) return post
+function normalizeRowData(row: Record<string, unknown>): Record<string, unknown> {
+    if (!row) return row
+
+    const category = row.cat_id
+        ? { id: row.cat_id, name: row.cat_name, slug: row.cat_slug }
+        : null
+
+    const author = row.col_id
+        ? {
+            id: row.col_id,
+            name: row.col_name,
+            slug: row.col_slug,
+            photo_url: row.col_photo_url,
+            bio: row.col_bio,
+            instagram_url: row.col_instagram_url,
+            twitter_url: row.col_twitter_url,
+        }
+        : null
 
     return {
-        ...post,
-        // Transform cover_image_url (string) → featured_image (object)
-        featured_image: post.cover_image_url
+        ...row,
+        category,
+        author,
+        featured_image: row.cover_image_url
             ? {
-                url: post.cover_image_url,
-                alt_text: post.title || 'Imagem do post'
+                url: row.cover_image_url,
+                alt_text: (row.title as string) || 'Imagem do post'
             }
             : null,
-        // Mantém cover_image_url para compatibilidade
-        cover_image_url: post.cover_image_url
+        cover_image_url: row.cover_image_url
     }
 }

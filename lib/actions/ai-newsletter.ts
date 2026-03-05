@@ -6,7 +6,7 @@
  */
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 import {
     generateNewsletter,
     saveNewsletter,
@@ -50,37 +50,18 @@ export async function saveGeneratedNewsletter(
  * Get all newsletters
  */
 export async function getNewsletters(status?: string) {
-    const supabase = await createClient()
-
-    let query = supabase
-        .from('newsletters')
-        .select('*')
-        .order('created_at', { ascending: false })
-
     if (status) {
-        query = query.eq('status', status)
+        return sql`SELECT * FROM newsletters WHERE status = ${status} ORDER BY created_at DESC` as Promise<any[]>
     }
-
-    const { data, error } = await query
-
-    if (error) throw error
-    return data || []
+    return sql`SELECT * FROM newsletters ORDER BY created_at DESC` as Promise<any[]>
 }
 
 /**
  * Get a single newsletter
  */
 export async function getNewsletter(id: string) {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('newsletters')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-    if (error) throw error
-    return data
+    const rows = await sql`SELECT * FROM newsletters WHERE id = ${id} LIMIT 1`
+    return rows[0] || null
 }
 
 /**
@@ -97,22 +78,16 @@ export async function updateNewsletter(
         scheduledFor?: string
     }
 ) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('newsletters')
-        .update({
-            title: updates.title,
-            subject: updates.subject,
-            content: updates.content,
-            html_content: updates.htmlContent,
-            status: updates.status,
-            scheduled_for: updates.scheduledFor
-        })
-        .eq('id', id)
-
-    if (error) throw error
-
+    await sql`
+        UPDATE newsletters SET
+            title = ${updates.title ?? null},
+            subject = ${updates.subject ?? null},
+            content = ${updates.content ?? null},
+            html_content = ${updates.htmlContent ?? null},
+            status = ${updates.status ?? null},
+            scheduled_for = ${updates.scheduledFor ?? null}
+        WHERE id = ${id}
+    `
     revalidatePath('/cms/newsletter')
     return { success: true }
 }
@@ -121,15 +96,7 @@ export async function updateNewsletter(
  * Delete newsletter
  */
 export async function deleteNewsletter(id: string) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('newsletters')
-        .delete()
-        .eq('id', id)
-
-    if (error) throw error
-
+    await sql`DELETE FROM newsletters WHERE id = ${id}`
     revalidatePath('/cms/newsletter')
     return { success: true }
 }
@@ -138,18 +105,7 @@ export async function deleteNewsletter(id: string) {
  * Schedule newsletter for sending
  */
 export async function scheduleNewsletter(id: string, scheduledFor: string) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('newsletters')
-        .update({
-            status: 'scheduled',
-            scheduled_for: new Date(scheduledFor).toISOString()
-        })
-        .eq('id', id)
-
-    if (error) throw error
-
+    await sql`UPDATE newsletters SET status = 'scheduled', scheduled_for = ${new Date(scheduledFor).toISOString()} WHERE id = ${id}`
     revalidatePath('/cms/newsletter')
     return { success: true }
 }
@@ -185,15 +141,7 @@ export async function upsertSchedule(schedule: {
  * Delete newsletter schedule
  */
 export async function deleteSchedule(id: string) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('newsletter_schedules')
-        .delete()
-        .eq('id', id)
-
-    if (error) throw error
-
+    await sql`DELETE FROM newsletter_schedules WHERE id = ${id}`
     revalidatePath('/cms/newsletter')
     return { success: true }
 }
@@ -201,49 +149,33 @@ export async function deleteSchedule(id: string) {
 /**
  * Get recent posts for newsletter selection
  */
-export async function getRecentPostsForNewsletter(
-    daysBack: number = 7,
-    categoryId?: string
-) {
-    const supabase = await createClient()
+export async function getRecentPostsForNewsletter(daysBack: number = 7, categoryId?: string) {
     const sinceDate = new Date()
     sinceDate.setDate(sinceDate.getDate() - daysBack)
-
-    let query = supabase
-        .from('posts')
-        .select('id, title, excerpt, slug, published_at, cover_image_url, categories(id, name)')
-        .eq('status', 'published')
-        .gte('published_at', sinceDate.toISOString())
-        .order('published_at', { ascending: false })
-        .limit(30)
-
     if (categoryId) {
-        query = query.eq('category_id', categoryId)
+        return sql`
+            SELECT p.id, p.title, p.excerpt, p.slug, p.published_at, p.cover_image_url,
+                cat.id as cat_id, cat.name as cat_name
+            FROM posts p LEFT JOIN categories cat ON cat.id = p.category_id
+            WHERE p.status = 'published' AND p.published_at >= ${sinceDate.toISOString()}
+            AND p.category_id = ${categoryId}
+            ORDER BY p.published_at DESC LIMIT 30
+        ` as Promise<any[]>
     }
-
-    const { data, error } = await query
-
-    if (error) throw error
-    return data || []
+    return sql`
+        SELECT p.id, p.title, p.excerpt, p.slug, p.published_at, p.cover_image_url,
+            cat.id as cat_id, cat.name as cat_name
+        FROM posts p LEFT JOIN categories cat ON cat.id = p.category_id
+        WHERE p.status = 'published' AND p.published_at >= ${sinceDate.toISOString()}
+        ORDER BY p.published_at DESC LIMIT 30
+    ` as Promise<any[]>
 }
 
 /**
  * Mark newsletter as sent
  */
 export async function markNewsletterSent(id: string, recipientsCount?: number) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('newsletters')
-        .update({
-            status: 'sent',
-            sent_at: new Date().toISOString(),
-            recipients_count: recipientsCount || 0
-        })
-        .eq('id', id)
-
-    if (error) throw error
-
+    await sql`UPDATE newsletters SET status = 'sent', sent_at = NOW(), recipients_count = ${recipientsCount || 0} WHERE id = ${id}`
     revalidatePath('/cms/newsletter')
     return { success: true }
 }
@@ -252,11 +184,7 @@ export async function markNewsletterSent(id: string, recipientsCount?: number) {
  * Get newsletter stats
  */
 export async function getNewsletterStats() {
-    const supabase = await createClient()
-
-    const { data: newsletters } = await supabase
-        .from('newsletters')
-        .select('status, recipients_count, opens_count, clicks_count')
+    const newsletters = await sql`SELECT status, recipients_count, opens_count, clicks_count FROM newsletters`
 
     const stats = {
         total: newsletters?.length || 0,

@@ -1,7 +1,9 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
+import { auth } from '@/auth'
 import { revalidatePath } from 'next/cache'
+import bcrypt from 'bcryptjs'
 
 export interface User {
     id: string
@@ -13,203 +15,99 @@ export interface User {
 }
 
 export async function getUsers(): Promise<User[]> {
-    const supabase = await createClient()
-
-    // Get all users from profiles and join with user_roles
-    const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-    if (profilesError) {
-        console.error('Error fetching profiles:', profilesError)
+    try {
+        const rows = await sql`
+            SELECT p.*, ur.role
+            FROM profiles p
+            LEFT JOIN user_roles ur ON ur.user_id = p.id
+            ORDER BY p.created_at DESC
+        `
+        return rows.map((r: any) => ({
+            id: r.id,
+            email: r.email || '',
+            name: r.name || r.email?.split('@')[0] || 'Sem nome',
+            role: (r.role || 'user') as 'admin' | 'editor' | 'user',
+            created_at: r.created_at,
+            last_sign_in: r.last_sign_in_at,
+        }))
+    } catch (error) {
+        console.error('Error fetching users:', error)
         return []
     }
-
-    // Get roles for all users
-    const { data: roles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('*')
-
-    if (rolesError) {
-        console.error('Error fetching roles:', rolesError)
-    }
-
-    const rolesMap = new Map(roles?.map(r => [r.user_id, r.role]) || [])
-
-    return profiles.map(profile => ({
-        id: profile.id,
-        email: profile.email || '',
-        name: profile.name || profile.email?.split('@')[0] || 'Sem nome',
-        role: (rolesMap.get(profile.id) || 'user') as 'admin' | 'editor' | 'user',
-        created_at: profile.created_at,
-        last_sign_in: profile.last_sign_in_at
-    }))
 }
 
 export async function updateUserRole(userId: string, role: 'admin' | 'editor' | 'user'): Promise<{ success: boolean; error?: string }> {
-    // Use admin client to bypass RLS
-    const supabase = await createAdminClient()
-
-    // Check if role exists for user
-    const { data: existingRole } = await supabase
-        .from('user_roles')
-        .select('id')
-        .eq('user_id', userId)
-        .single()
-
-    if (existingRole) {
-        // Update existing role
-        const { error } = await supabase
-            .from('user_roles')
-            .update({ role, updated_at: new Date().toISOString() })
-            .eq('user_id', userId)
-
-        if (error) {
-            console.error('Error updating role:', error)
-            return { success: false, error: error.message }
+    try {
+        const existing = await sql`SELECT id FROM user_roles WHERE user_id = ${userId} LIMIT 1`
+        if (existing && existing.length > 0) {
+            await sql`UPDATE user_roles SET role = ${role}, updated_at = NOW() WHERE user_id = ${userId}`
+        } else {
+            await sql`INSERT INTO user_roles (user_id, role) VALUES (${userId}, ${role})`
         }
-    } else {
-        // Insert new role
-        const { error } = await supabase
-            .from('user_roles')
-            .insert({ user_id: userId, role })
-
-        if (error) {
-            console.error('Error inserting role:', error)
-            return { success: false, error: error.message }
-        }
+        revalidatePath('/cms/settings/users')
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message }
     }
-
-    revalidatePath('/cms/settings/users')
-    return { success: true }
 }
 
 export async function updateUserProfile(userId: string, data: { name?: string; email?: string }): Promise<{ success: boolean; error?: string }> {
-    // Use admin client to bypass RLS
-    const supabase = await createAdminClient()
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({
-            ...data,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', userId)
-
-    if (error) {
-        console.error('Error updating profile:', error)
+    try {
+        const keys = Object.keys(data)
+        const values = Object.values(data)
+        const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+        await sql(`UPDATE profiles SET ${setClause}, updated_at = NOW() WHERE id = $${keys.length + 1}`, [...values, userId])
+        revalidatePath('/cms/settings/users')
+        return { success: true }
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    revalidatePath('/cms/settings/users')
-    return { success: true }
 }
 
 export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
-    // Use admin client to bypass RLS
-    const supabase = await createAdminClient()
-
-    // Delete role first
-    await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId)
-
-    // Delete profile
-    const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId)
-
-    if (error) {
-        console.error('Error deleting user:', error)
+    try {
+        await sql`DELETE FROM user_roles WHERE user_id = ${userId}`
+        await sql`DELETE FROM profile_auth WHERE user_id = ${userId}`
+        await sql`DELETE FROM profiles WHERE id = ${userId}`
+        revalidatePath('/cms/settings/users')
+        return { success: true }
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    // Note: The actual auth user deletion would require admin API
-    // In production, you'd use supabase.auth.admin.deleteUser(userId)
-
-    revalidatePath('/cms/settings/users')
-    return { success: true }
 }
 
 export async function createUser(data: { email: string; password: string; name: string; role: 'admin' | 'editor' }): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
-
-    // Note: Creating users via client-side requires either:
-    // 1. A server-side admin API call
-    // 2. Using signUp and then confirming the user
-    // For now, we'll use signUp which sends a confirmation email
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-            data: {
-                name: data.name
-            }
-        }
-    })
-
-    if (authError) {
-        console.error('Error creating user:', authError)
-        return { success: false, error: authError.message }
+    try {
+        const passwordHash = await bcrypt.hash(data.password, 12)
+        const rows = await sql`
+            INSERT INTO profiles (email, name)
+            VALUES (${data.email}, ${data.name})
+            RETURNING id
+        `
+        const userId = rows[0].id
+        await sql`INSERT INTO user_roles (user_id, role) VALUES (${userId}, ${data.role})`
+        await sql`INSERT INTO profile_auth (user_id, password_hash) VALUES (${userId}, ${passwordHash})`
+        revalidatePath('/cms/settings/users')
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message }
     }
-
-    if (authData.user) {
-        // Create profile
-        await supabase
-            .from('profiles')
-            .upsert({
-                id: authData.user.id,
-                email: data.email,
-                name: data.name
-            })
-
-        // Create role
-        await supabase
-            .from('user_roles')
-            .upsert({
-                user_id: authData.user.id,
-                role: data.role
-            })
-    }
-
-    revalidatePath('/cms/settings/users')
-    return { success: true }
 }
 
 export async function updateUserPassword(userId: string, password: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
+    try {
+        const session = await auth()
+        if (!session?.user) return { success: false, error: 'Usuário não autenticado' }
+        if (session.user.role !== 'admin') return { success: false, error: 'Apenas administradores podem alterar senhas' }
 
-    // Verify if requester is admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-        return { success: false, error: 'Usuário não autenticado' }
-    }
-
-    const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single()
-
-    if (roleData?.role !== 'admin') {
-        return { success: false, error: 'Apenas administradores podem alterar senhas' }
-    }
-
-    const supabaseAdmin = createAdminClient()
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(
-        userId,
-        { password }
-    )
-
-    if (error) {
-        console.error('Error updating password:', error)
+        const passwordHash = await bcrypt.hash(password, 12)
+        await sql`
+            INSERT INTO profile_auth (user_id, password_hash)
+            VALUES (${userId}, ${passwordHash})
+            ON CONFLICT (user_id) DO UPDATE SET password_hash = ${passwordHash}
+        `
+        return { success: true }
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    return { success: true }
 }
-

@@ -4,7 +4,7 @@
  */
 
 import { openrouter, MODELS } from './openrouter'
-import { createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 
 export interface RewriteConfig {
     sourceContent: string
@@ -29,17 +29,10 @@ export interface RewrittenContent {
  */
 async function getRewriteGuidelines(): Promise<string> {
     try {
-        const supabase = createAdminClient()
-        const { data } = await supabase
-            .from('ai_settings')
-            .select('setting_value')
-            .eq('setting_key', 'rewrite_guidelines')
-            .single()
-
-        if (data?.setting_value) {
-            return typeof data.setting_value === 'string'
-                ? JSON.parse(data.setting_value)
-                : data.setting_value
+        const rows = await sql`SELECT setting_value FROM ai_settings WHERE setting_key = 'rewrite_guidelines' LIMIT 1`
+        if (rows && rows[0]?.setting_value) {
+            const val = rows[0].setting_value
+            return typeof val === 'string' ? JSON.parse(val) : val
         }
     } catch {
         // Use default guidelines

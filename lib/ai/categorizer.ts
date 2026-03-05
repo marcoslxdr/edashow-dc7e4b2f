@@ -4,7 +4,7 @@
  */
 
 import { openrouter, MODELS } from './openrouter'
-import { createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 
 export interface CategorizationResult {
     category: string
@@ -19,13 +19,7 @@ export interface CategorizationResult {
  */
 async function getAvailableCategories(): Promise<Array<{ id: string; name: string; slug: string }>> {
     try {
-        const supabase = createAdminClient()
-        const { data } = await supabase
-            .from('categories')
-            .select('id, name, slug')
-            .order('name')
-
-        return data || []
+        return sql`SELECT id, name, slug FROM categories ORDER BY name` as Promise<any[]>
     } catch {
         // Fallback categories
         return [

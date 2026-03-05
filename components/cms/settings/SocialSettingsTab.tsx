@@ -4,12 +4,11 @@ import React, { useEffect, useState } from 'react'
 import { Instagram, Youtube, Linkedin, Facebook, Twitter, Save, RefreshCw, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { createClient } from '@/lib/supabase/client'
+import { getSiteSettings, updateSiteSettings } from '@/lib/actions/cms-settings'
 
 export function SocialSettingsTab() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [settingsId, setSettingsId] = useState<string | null>(null)
     const [socialMedia, setSocialMedia] = useState({
         instagram: '',
         youtube: '',
@@ -22,27 +21,18 @@ export function SocialSettingsTab() {
 
     const fetchSettings = async () => {
         setLoading(true)
-        const supabase = createClient()
-        const { data, error } = await supabase
-            .from('theme_settings')
-            .select('id, social_media')
-            .single()
-
-        if (error) {
-            console.error('Erro ao buscar configurações:', error)
-        } else if (data) {
-            setSettingsId(data.id)
-            if (data.social_media) {
-                setSocialMedia({
-                    instagram: data.social_media.instagram || '',
-                    youtube: data.social_media.youtube || '',
-                    threads: data.social_media.threads || '',
-                    linkedin: data.social_media.linkedin || '',
-                    facebook: data.social_media.facebook || '',
-                    twitter: data.social_media.twitter || '',
-                    whatsapp: data.social_media.whatsapp || ''
-                })
-            }
+        const data = await getSiteSettings()
+        if (data?.social_media) {
+            const sm = data.social_media as Record<string, string>
+            setSocialMedia({
+                instagram: sm.instagram || '',
+                youtube: sm.youtube || '',
+                threads: sm.threads || '',
+                linkedin: sm.linkedin || '',
+                facebook: sm.facebook || '',
+                twitter: sm.twitter || '',
+                whatsapp: sm.whatsapp || ''
+            })
         }
         setLoading(false)
     }
@@ -52,20 +42,10 @@ export function SocialSettingsTab() {
     }, [])
 
     const handleSave = async () => {
-        if (!settingsId) return
-
         setSaving(true)
-        const supabase = createClient()
-        const { error } = await supabase
-            .from('theme_settings')
-            .update({
-                social_media: socialMedia,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', settingsId)
-
-        if (error) {
-            console.error('Erro ao salvar:', error)
+        const result = await updateSiteSettings({ social_media: socialMedia })
+        if (!result.success) {
+            console.error('Erro ao salvar:', result.error)
             alert('Erro ao salvar configurações')
         } else {
             alert('Configurações salvas com sucesso!')

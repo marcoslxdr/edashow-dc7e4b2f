@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { put } from '@vercel/blob'
 import { validateApiKey } from '@/lib/api-auth'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']
@@ -8,7 +8,7 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 /**
  * POST /api/posts/upload
- * Faz o upload de uma imagem para o Supabase Storage e retorna a URL pública.
+ * Faz o upload de uma imagem para o Vercel Blob e retorna a URL pública.
  *
  * Use a URL retornada como valor de "cover_image_url" ao criar ou atualizar posts.
  *
@@ -22,8 +22,8 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
  *
  * Resposta (200):
  *   {
- *     "url": "https://xxx.supabase.co/storage/v1/object/public/...",
- *     "filename": "1234567890-minha-imagem.jpg",
+ *     "url": "https://xxxx.public.blob.vercel-storage.com/...",
+ *     "filename": "api-posts/1234567890-minha-imagem.jpg",
  *     "size": 204800,
  *     "mime_type": "image/jpeg"
  *   }
@@ -75,31 +75,14 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    const supabase = createAdminClient()
-    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
-
-    const { data: storageData, error: storageError } = await supabase.storage
-        .from(bucket)
-        .upload(filename, buffer, {
-            contentType: file.type,
-            upsert: false
-        })
-
-    if (storageError) {
-        console.error('[api/posts/upload] Storage error:', storageError)
-        return NextResponse.json(
-            { error: `Falha ao salvar a imagem: ${storageError.message}` },
-            { status: 500 }
-        )
-    }
-
-    const { data: { publicUrl } } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(storageData.path)
+    const blob = await put(filename, buffer, {
+        access: 'public',
+        contentType: file.type,
+    })
 
     return NextResponse.json({
-        url: publicUrl,
-        filename: storageData.path,
+        url: blob.url,
+        filename,
         size: file.size,
         mime_type: file.type
     })

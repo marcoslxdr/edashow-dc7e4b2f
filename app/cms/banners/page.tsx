@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DataTable } from '@/components/cms/DataTable'
 import { saveBanner, deleteBanner } from '@/lib/actions/cms-banners'
-import { createClient } from '@/lib/supabase/client'
+
 import type { Banner, BannerLocation } from '@/lib/types/banner'
 import { BANNER_LOCATIONS } from '@/lib/types/banner'
 
@@ -34,12 +34,15 @@ export default function CMSBannersPage() {
     }, [])
 
     async function fetchBanners() {
-        const supabase = createClient()
-        const { data, error } = await supabase.from('banners').select('*').order('display_order').order('created_at', { ascending: false })
-        if (!error && data) {
-            setBanners(data)
+        try {
+            const res = await fetch('/api/cms/banners')
+            const { banners } = await res.json()
+            setBanners(banners || [])
+        } catch (error) {
+            console.error('Error fetching banners:', error)
+        } finally {
+            setLoading(false)
         }
-        setLoading(false)
     }
 
     const selectedLocation = BANNER_LOCATIONS.find(loc => loc.value === formData.location)

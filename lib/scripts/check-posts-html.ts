@@ -3,37 +3,31 @@
  * Uso: npx tsx lib/scripts/check-posts-html.ts
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { neon } from '@neondatabase/serverless'
 import { config } from 'dotenv'
 
 // Carregar variáveis de ambiente
 config({ path: '.env.local' })
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const databaseUrl = process.env.DATABASE_URL!
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Variáveis de ambiente NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são necessárias')
-  console.error('   Verifique se o arquivo .env.local existe e contém essas variáveis.')
+if (!databaseUrl) {
+  console.error('❌ Variável de ambiente DATABASE_URL é necessária')
+  console.error('   Verifique se o arquivo .env.local existe e contém DATABASE_URL.')
   process.exit(1)
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey)
+const sql = neon(databaseUrl)
 
 async function checkPostsHTML() {
   console.log('🔍 Verificando HTML dos posts publicados...\n')
 
-  const { data: posts, error } = await supabase
-    .from('posts')
-    .select('id, title, content')
-    .eq('status', 'published')
-    .order('published_at', { ascending: false })
-    .limit(5)
-
-  if (error) {
-    console.error('❌ Erro ao buscar posts:', error)
-    return
-  }
+  const posts = await sql`
+    SELECT id, title, content FROM posts
+    WHERE status = 'published'
+    ORDER BY published_at DESC
+    LIMIT 5
+  `
 
   if (!posts || posts.length === 0) {
     console.log('ℹ️  Nenhum post encontrado')
@@ -41,7 +35,7 @@ async function checkPostsHTML() {
   }
 
   posts.forEach((post, index) => {
-    const contentStart = post.content?.substring(0, 200) || ''
+    const contentStart = (post.content as string)?.substring(0, 200) || ''
     const hasBlockquote = contentStart.trim().startsWith('<blockquote>')
     const hasParagraph = contentStart.trim().startsWith('<p>')
 
@@ -58,9 +52,9 @@ async function checkPostsHTML() {
       console.log(`   ❓ Formato desconhecido`)
     }
 
-    // Conta quantos blockquotes e parágrafos tem
-    const blockquoteCount = (post.content?.match(/<blockquote>/g) || []).length
-    const paragraphCount = (post.content?.match(/<p>/g) || []).length
+    const content = post.content as string
+    const blockquoteCount = (content?.match(/<blockquote>/g) || []).length
+    const paragraphCount = (content?.match(/<p>/g) || []).length
 
     console.log(`   Estatísticas: ${paragraphCount} <p>, ${blockquoteCount} <blockquote>`)
   })

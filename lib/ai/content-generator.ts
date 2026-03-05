@@ -6,7 +6,7 @@
 import { generateObject, generateText } from 'ai'
 import { z } from 'zod'
 import { openrouter, DEFAULT_MODEL, PREMIUM_MODEL } from './vercel-ai'
-import { createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 import { POST_GENERATION_PROMPT } from './prompts'
 import { ContextAssembler } from './context-engine/assembler'
 
@@ -286,16 +286,7 @@ export async function logGeneration(
     costUsd: number
 ): Promise<void> {
     try {
-        const supabase = createAdminClient()
-        await supabase.from('ai_generations').insert({
-            type,
-            input_data: inputData,
-            output_data: outputData,
-            model_used: model,
-            tokens_used: tokensUsed,
-            cost_usd: costUsd,
-            status: 'completed'
-        })
+        await sql`INSERT INTO ai_generations (type, input_data, output_data, model_used, tokens_used, cost_usd, status) VALUES (${type}, ${JSON.stringify(inputData)}, ${JSON.stringify(outputData)}, ${model}, ${tokensUsed}, ${costUsd}, 'completed')`
     } catch (error) {
         console.error('Failed to log AI generation:', error)
     }

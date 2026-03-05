@@ -1,14 +1,8 @@
 'use server'
 
-/**
- * AI Settings Server Actions
- * CRUD operations for AI configuration, persona, and prompts
- */
-
-import { createClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 import { revalidatePath } from 'next/cache'
 
-// Types
 export interface PersonaConfig {
     persona_description: string
     writing_style: string
@@ -25,98 +19,51 @@ export interface AIPrompt {
     is_active: boolean
 }
 
-export interface AISetting {
-    setting_key: string
-    setting_value: any
-}
-
-/**
- * Get all AI settings
- */
 export async function getAISettings(): Promise<Record<string, any>> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('ai_settings')
-        .select('setting_key, setting_value')
-
-    if (error) {
-        console.error('Error fetching AI settings:', error)
+    try {
+        const data = await sql`SELECT setting_key, setting_value FROM ai_settings`
+        const settings: Record<string, any> = {}
+        for (const item of data || []) {
+            try {
+                settings[item.setting_key] = typeof item.setting_value === 'string'
+                    ? JSON.parse(item.setting_value)
+                    : item.setting_value
+            } catch {
+                settings[item.setting_key] = item.setting_value
+            }
+        }
+        return settings
+    } catch {
         return {}
     }
-
-    const settings: Record<string, any> = {}
-    for (const item of data || []) {
-        try {
-            settings[item.setting_key] = typeof item.setting_value === 'string'
-                ? JSON.parse(item.setting_value)
-                : item.setting_value
-        } catch {
-            settings[item.setting_key] = item.setting_value
-        }
-    }
-
-    return settings
 }
 
-/**
- * Get a single AI setting
- */
 export async function getAISetting(key: string): Promise<any> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('ai_settings')
-        .select('setting_value')
-        .eq('setting_key', key)
-        .single()
-
-    if (error || !data) {
-        return null
-    }
-
     try {
-        return typeof data.setting_value === 'string'
-            ? JSON.parse(data.setting_value)
-            : data.setting_value
-    } catch {
-        return data.setting_value
-    }
+        const rows = await sql`SELECT setting_value FROM ai_settings WHERE setting_key = ${key} LIMIT 1`
+        if (!rows || rows.length === 0) return null
+        const val = rows[0].setting_value
+        try { return typeof val === 'string' ? JSON.parse(val) : val } catch { return val }
+    } catch { return null }
 }
 
-/**
- * Update or create an AI setting
- */
 export async function updateAISetting(key: string, value: any): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
-
-    const settingValue = typeof value === 'string' ? value : JSON.stringify(value)
-
-    const { error } = await supabase
-        .from('ai_settings')
-        .upsert({
-            setting_key: key,
-            setting_value: settingValue,
-            updated_at: new Date().toISOString()
-        }, {
-            onConflict: 'setting_key'
-        })
-
-    if (error) {
-        console.error('Error updating AI setting:', error)
+    try {
+        const settingValue = typeof value === 'string' ? value : JSON.stringify(value)
+        await sql`
+            INSERT INTO ai_settings (setting_key, setting_value, updated_at)
+            VALUES (${key}, ${settingValue}, NOW())
+            ON CONFLICT (setting_key) DO UPDATE SET setting_value = ${settingValue}, updated_at = NOW()
+        `
+        revalidatePath('/cms/ia')
+        return { success: true }
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    revalidatePath('/cms/ia')
-    return { success: true }
 }
 
-/**
- * Get persona configuration
- */
 export async function getPersonaConfig(): Promise<PersonaConfig> {
     const settings = await getAISettings()
-
     return {
         persona_description: settings.persona_description || 'Você é um redator especialista em saúde e odontologia para o portal EDA Show.',
         writing_style: settings.writing_style || 'informativo e acessível',
@@ -125,147 +72,69 @@ export async function getPersonaConfig(): Promise<PersonaConfig> {
     }
 }
 
-/**
- * Update persona configuration
- */
 export async function updatePersonaConfig(config: Partial<PersonaConfig>): Promise<{ success: boolean; error?: string }> {
-    const updates = Object.entries(config)
     let lastError: string | undefined
-
-    for (const [key, value] of updates) {
+    for (const [key, value] of Object.entries(config)) {
         const result = await updateAISetting(key, value)
-        if (!result.success) {
-            lastError = result.error
-        }
+        if (!result.success) lastError = result.error
     }
-
-    if (lastError) {
-        return { success: false, error: lastError }
-    }
-
-    return { success: true }
+    return lastError ? { success: false, error: lastError } : { success: true }
 }
 
-/**
- * Get AI prompts by category
- */
 export async function getAIPrompts(category?: string): Promise<AIPrompt[]> {
-    const supabase = await createClient()
-
-    let query = supabase
-        .from('ai_prompts')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-    if (category) {
-        query = query.eq('category', category)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-        console.error('Error fetching AI prompts:', error)
-        return []
-    }
-
-    return data || []
+    try {
+        let data
+        if (category) {
+            data = await sql`SELECT * FROM ai_prompts WHERE category = ${category} ORDER BY created_at DESC`
+        } else {
+            data = await sql`SELECT * FROM ai_prompts ORDER BY created_at DESC`
+        }
+        return data || []
+    } catch { return [] }
 }
 
-/**
- * Get active prompt by category and name
- */
 export async function getActivePrompt(category: string, name: string): Promise<AIPrompt | null> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('ai_prompts')
-        .select('*')
-        .eq('category', category)
-        .eq('name', name)
-        .eq('is_active', true)
-        .single()
-
-    if (error || !data) {
-        return null
-    }
-
-    return data
+    try {
+        const rows = await sql`SELECT * FROM ai_prompts WHERE category = ${category} AND name = ${name} AND is_active = true LIMIT 1`
+        return rows[0] || null
+    } catch { return null }
 }
 
-/**
- * Save an AI prompt (create or update)
- */
 export async function saveAIPrompt(prompt: AIPrompt): Promise<{ success: boolean; id?: string; error?: string }> {
-    const supabase = await createClient()
-
-    if (prompt.id) {
-        // Update existing prompt
-        const { error } = await supabase
-            .from('ai_prompts')
-            .update({
-                name: prompt.name,
-                category: prompt.category,
-                prompt_template: prompt.prompt_template,
-                description: prompt.description,
-                is_active: prompt.is_active,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', prompt.id)
-
-        if (error) {
-            console.error('Error updating AI prompt:', error)
-            return { success: false, error: error.message }
+    try {
+        if (prompt.id) {
+            await sql`
+                UPDATE ai_prompts SET name = ${prompt.name}, category = ${prompt.category},
+                    prompt_template = ${prompt.prompt_template}, description = ${prompt.description || null},
+                    is_active = ${prompt.is_active}, updated_at = NOW()
+                WHERE id = ${prompt.id}
+            `
+            revalidatePath('/cms/ia')
+            return { success: true, id: prompt.id }
+        } else {
+            const rows = await sql`
+                INSERT INTO ai_prompts (name, category, prompt_template, description, is_active)
+                VALUES (${prompt.name}, ${prompt.category}, ${prompt.prompt_template}, ${prompt.description || null}, ${prompt.is_active})
+                RETURNING id
+            `
+            revalidatePath('/cms/ia')
+            return { success: true, id: rows[0]?.id }
         }
-
-        revalidatePath('/cms/ia')
-        return { success: true, id: prompt.id }
-    } else {
-        // Create new prompt
-        const { data, error } = await supabase
-            .from('ai_prompts')
-            .insert({
-                name: prompt.name,
-                category: prompt.category,
-                prompt_template: prompt.prompt_template,
-                description: prompt.description,
-                is_active: prompt.is_active
-            })
-            .select('id')
-            .single()
-
-        if (error) {
-            console.error('Error creating AI prompt:', error)
-            return { success: false, error: error.message }
-        }
-
-        revalidatePath('/cms/ia')
-        return { success: true, id: data?.id }
-    }
-}
-
-/**
- * Delete an AI prompt
- */
-export async function deleteAIPrompt(id: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('ai_prompts')
-        .delete()
-        .eq('id', id)
-
-    if (error) {
-        console.error('Error deleting AI prompt:', error)
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    revalidatePath('/cms/ia')
-    return { success: true }
 }
 
-/**
- * Get available AI models
- */
+export async function deleteAIPrompt(id: string): Promise<{ success: boolean; error?: string }> {
+    try {
+        await sql`DELETE FROM ai_prompts WHERE id = ${id}`
+        revalidatePath('/cms/ia')
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message }
+    }
+}
+
 export async function getAvailableModels(): Promise<Array<{ id: string; name: string; description: string }>> {
     return [
         { id: 'z-ai/glm-4.7-flash', name: 'GLM-4.7-Flash', description: 'Rápido, econômico e multimodal' },
@@ -278,97 +147,40 @@ export async function getAvailableModels(): Promise<Array<{ id: string; name: st
     ]
 }
 
-/**
- * Get AI usage statistics
- */
-export async function getAIUsageStats(days: number = 30): Promise<{
-    totalGenerations: number
-    totalTokens: number
-    totalCost: number
-    byType: Record<string, number>
-    byDay: Array<{ date: string; count: number; tokens: number }>
-}> {
-    const supabase = await createClient()
-
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - days)
-
-    const { data, error } = await supabase
-        .from('ai_generations')
-        .select('type, tokens_used, cost_usd, created_at')
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: true })
-
-    if (error) {
-        console.error('Error fetching AI usage stats:', error)
-        return {
-            totalGenerations: 0,
-            totalTokens: 0,
-            totalCost: 0,
-            byType: {},
-            byDay: []
+export async function getAIUsageStats(days: number = 30) {
+    try {
+        const startDate = new Date()
+        startDate.setDate(startDate.getDate() - days)
+        const data = await sql`
+            SELECT type, tokens_used, cost_usd, created_at FROM ai_generations
+            WHERE created_at >= ${startDate.toISOString()}
+            ORDER BY created_at ASC
+        `
+        const stats = { totalGenerations: data?.length || 0, totalTokens: 0, totalCost: 0, byType: {} as Record<string, number>, byDay: [] as any[] }
+        const dayMap: Record<string, { count: number; tokens: number }> = {}
+        for (const gen of data || []) {
+            stats.totalTokens += gen.tokens_used || 0
+            stats.totalCost += parseFloat(String(gen.cost_usd)) || 0
+            stats.byType[gen.type] = (stats.byType[gen.type] || 0) + 1
+            const dateKey = new Date(gen.created_at).toISOString().split('T')[0]
+            if (!dayMap[dateKey]) dayMap[dateKey] = { count: 0, tokens: 0 }
+            dayMap[dateKey].count++
+            dayMap[dateKey].tokens += gen.tokens_used || 0
         }
+        stats.byDay = Object.entries(dayMap).map(([date, d]) => ({ date, count: d.count, tokens: d.tokens }))
+        return stats
+    } catch {
+        return { totalGenerations: 0, totalTokens: 0, totalCost: 0, byType: {}, byDay: [] }
     }
-
-    const stats = {
-        totalGenerations: data?.length || 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byType: {} as Record<string, number>,
-        byDay: [] as Array<{ date: string; count: number; tokens: number }>
-    }
-
-    const dayMap: Record<string, { count: number; tokens: number }> = {}
-
-    for (const gen of data || []) {
-        stats.totalTokens += gen.tokens_used || 0
-        stats.totalCost += parseFloat(String(gen.cost_usd)) || 0
-        stats.byType[gen.type] = (stats.byType[gen.type] || 0) + 1
-
-        const dateKey = new Date(gen.created_at).toISOString().split('T')[0]
-        if (!dayMap[dateKey]) {
-            dayMap[dateKey] = { count: 0, tokens: 0 }
-        }
-        dayMap[dateKey].count++
-        dayMap[dateKey].tokens += gen.tokens_used || 0
-    }
-
-    stats.byDay = Object.entries(dayMap).map(([date, data]) => ({
-        date,
-        count: data.count,
-        tokens: data.tokens
-    }))
-
-    return stats
 }
 
-/**
- * Get prompt categories
- */
 export async function getPromptCategories(): Promise<string[]> {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('ai_prompts')
-        .select('category')
-
-    if (error) {
-        console.error('Error fetching prompt categories:', error)
+    try {
+        const data = await sql`SELECT DISTINCT category FROM ai_prompts WHERE category IS NOT NULL`
+        const categories = new Set<string>(data.map((r: any) => r.category))
+        for (const cat of ['post', 'rewrite', 'seo', 'newsletter']) categories.add(cat)
+        return Array.from(categories).sort()
+    } catch {
         return ['post', 'rewrite', 'seo', 'newsletter']
     }
-
-    const categories = new Set<string>()
-    for (const item of data || []) {
-        if (item.category) {
-            categories.add(item.category)
-        }
-    }
-
-    // Add default categories if not present
-    const defaults = ['post', 'rewrite', 'seo', 'newsletter']
-    for (const cat of defaults) {
-        categories.add(cat)
-    }
-
-    return Array.from(categories).sort()
 }

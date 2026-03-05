@@ -1,10 +1,7 @@
 'use server'
 
-/**
- * Server Actions for Image Settings Management
- */
-
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
+import { put } from '@vercel/blob'
 import { revalidatePath } from 'next/cache'
 import { ImageSettings } from '@/lib/images/image-optimizer'
 
@@ -21,132 +18,55 @@ export interface UpdateImageSettingsInput {
     watermark_size?: number
 }
 
-/**
- * Get image optimization settings
- */
 export async function getImageSettings(): Promise<ImageSettings | null> {
-    const supabase = await createClient()
+    try {
+        const rows = await sql`SELECT * FROM image_settings LIMIT 1`
+        if (rows && rows.length > 0) return rows[0] as ImageSettings
 
-    const { data, error } = await supabase
-        .from('image_settings')
-        .select('*')
-        .single()
-
-    if (error) {
+        // Create default settings if none exist
+        const newRows = await sql`INSERT INTO image_settings DEFAULT VALUES RETURNING *`
+        return newRows[0] as ImageSettings || null
+    } catch (error) {
         console.error('Error fetching image settings:', error)
-        // Try to create default settings if none exist
-        if (error.code === 'PGRST116') {
-            const { data: newData, error: insertError } = await supabase
-                .from('image_settings')
-                .insert({})
-                .select()
-                .single()
-
-            if (insertError) {
-                console.error('Error creating default settings:', insertError)
-                return null
-            }
-            return newData as ImageSettings
-        }
         return null
     }
-
-    return data as ImageSettings
 }
 
-/**
- * Update image optimization settings
- */
 export async function updateImageSettings(settings: UpdateImageSettingsInput): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createAdminClient()
+    try {
+        const existing = await sql`SELECT id FROM image_settings LIMIT 1`
+        if (!existing || existing.length === 0) {
+            await sql`INSERT INTO image_settings DEFAULT VALUES`
+            const fresh = await sql`SELECT id FROM image_settings LIMIT 1`
+            if (!fresh || fresh.length === 0) return { success: false, error: 'Falha ao criar configurações' }
+        }
 
-    // Use admin client to bypass RLS
+        const id = existing?.[0]?.id || (await sql`SELECT id FROM image_settings LIMIT 1`)[0]?.id
+        const keys = Object.keys(settings)
+        const values = Object.values(settings)
+        const setClause = keys.map((k, i) => `${k} = $${i + 1}`).join(', ')
+        await sql(`UPDATE image_settings SET ${setClause}, updated_at = NOW() WHERE id = $${keys.length + 1}`, [...values, id])
 
-    // First get the existing settings ID
-    const { data: existing, error: fetchError } = await supabase
-        .from('image_settings')
-        .select('id')
-        .single()
-
-    if (fetchError || !existing) {
-        return { success: false, error: 'Configurações não encontradas' }
-    }
-
-    // Update settings
-    const { error } = await supabase
-        .from('image_settings')
-        .update({
-            ...settings,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', existing.id)
-
-    if (error) {
-        console.error('Error updating image settings:', error)
+        revalidatePath('/cms/settings/images')
+        return { success: true }
+    } catch (error: any) {
         return { success: false, error: error.message }
     }
-
-    revalidatePath('/cms/settings/images')
-    return { success: true }
 }
 
-/**
- * Upload watermark logo
- */
 export async function uploadWatermarkLogo(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
-    const supabase = await createAdminClient()
-
-    // Use admin client to bypass RLS
     const file = formData.get('file') as File
+    if (!file) return { success: false, error: 'Nenhum arquivo enviado' }
+    if (!file.type.startsWith('image/')) return { success: false, error: 'O arquivo deve ser uma imagem' }
 
-    if (!file) {
-        return { success: false, error: 'Nenhum arquivo enviado' }
-    }
+    const blob = await put(`watermark/logo-${Date.now()}.png`, file, { access: 'public' })
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-        return { success: false, error: 'O arquivo deve ser uma imagem' }
-    }
+    const updateResult = await updateImageSettings({ watermark_logo_url: blob.url })
+    if (!updateResult.success) return { success: false, error: updateResult.error }
 
-    const filename = `watermark/logo-${Date.now()}.png`
-
-    // Upload to storage
-    const { data: storageData, error: storageError } = await supabase.storage
-        .from('edashow-media')
-        .upload(filename, file, {
-            upsert: true
-        })
-
-    if (storageError) {
-        console.error('Error uploading watermark logo:', storageError)
-        return { success: false, error: 'Erro ao fazer upload do logo' }
-    }
-
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-        .from('edashow-media')
-        .getPublicUrl(filename)
-
-    // Update settings with new logo URL
-    const updateResult = await updateImageSettings({
-        watermark_logo_url: publicUrl
-    })
-
-    if (!updateResult.success) {
-        return { success: false, error: updateResult.error }
-    }
-
-    return { success: true, url: publicUrl }
+    return { success: true, url: blob.url }
 }
 
-/**
- * Remove watermark logo
- */
 export async function removeWatermarkLogo(): Promise<{ success: boolean; error?: string }> {
-    const result = await updateImageSettings({
-        watermark_logo_url: null,
-        watermark_enabled: false
-    })
-
-    return result
+    return updateImageSettings({ watermark_logo_url: null, watermark_enabled: false })
 }

@@ -4,7 +4,7 @@
  */
 
 import { openrouter, MODELS } from './openrouter'
-import { createAdminClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 
 export interface NewsletterConfig {
     postIds?: string[]
@@ -279,49 +279,27 @@ export async function saveNewsletter(
     config: NewsletterConfig,
     scheduledFor?: Date
 ): Promise<string> {
-    const supabase = createAdminClient()
-
-    const { data, error } = await supabase
-        .from('newsletters')
-        .insert({
-            title: newsletter.title,
-            subject: newsletter.subject,
-            content: newsletter.content,
-            html_content: newsletter.htmlContent,
-            post_ids: newsletter.posts.map(p => p.id),
-            tone: config.tone || 'professional',
-            style: config.style || 'summary',
-            status: scheduledFor ? 'scheduled' : 'draft',
-            scheduled_for: scheduledFor?.toISOString()
-        })
-        .select('id')
-        .single()
-
-    if (error) {
-        throw new Error(`Failed to save newsletter: ${error.message}`)
-    }
-
-    return data.id
+    const rows = await sql`
+        INSERT INTO newsletters (title, subject, content, html_content, post_ids, tone, style, status, scheduled_for)
+        VALUES (${newsletter.title}, ${newsletter.subject}, ${newsletter.content}, ${newsletter.htmlContent},
+            ${JSON.stringify(newsletter.posts.map((p: any) => p.id))}, ${config.tone || 'professional'},
+            ${config.style || 'summary'}, ${scheduledFor ? 'scheduled' : 'draft'},
+            ${scheduledFor?.toISOString() || null})
+        RETURNING id
+    `
+    if (!rows || rows.length === 0) throw new Error('Failed to save newsletter')
+    return rows[0].id
 }
 
 /**
  * Get newsletter schedules
  */
 export async function getNewsletterSchedules() {
-    const supabase = createAdminClient()
-
-    const { data, error } = await supabase
-        .from('newsletter_schedules')
-        .select('*')
-        .eq('is_active', true)
-        .order('next_run_at', { ascending: true })
-
-    if (error) {
-        console.error('Error fetching newsletter schedules:', error)
+    try {
+        return sql`SELECT * FROM newsletter_schedules WHERE is_active = true ORDER BY next_run_at ASC` as Promise<any[]>
+    } catch {
         return []
     }
-
-    return data || []
 }
 
 /**
@@ -339,45 +317,30 @@ export async function upsertNewsletterSchedule(schedule: {
     categoryFilter?: string[]
     isActive?: boolean
 }): Promise<string> {
-    const supabase = createAdminClient()
-
-    // Calculate next run time
     const nextRunAt = calculateNextRunTime(schedule)
-
-    const data = {
-        name: schedule.name,
-        frequency: schedule.frequency,
-        day_of_week: schedule.dayOfWeek,
-        day_of_month: schedule.dayOfMonth,
-        time_of_day: schedule.timeOfDay || '09:00:00',
-        tone: schedule.tone || 'professional',
-        style: schedule.style || 'summary',
-        category_filter: schedule.categoryFilter,
-        is_active: schedule.isActive ?? true,
-        next_run_at: nextRunAt?.toISOString()
-    }
 
     let result
     if (schedule.id) {
-        result = await supabase
-            .from('newsletter_schedules')
-            .update(data)
-            .eq('id', schedule.id)
-            .select('id')
-            .single()
+        result = await sql`
+            UPDATE newsletter_schedules SET name = ${schedule.name}, frequency = ${schedule.frequency},
+                day_of_week = ${schedule.dayOfWeek ?? null}, day_of_month = ${schedule.dayOfMonth ?? null},
+                time_of_day = ${schedule.timeOfDay || '09:00:00'}, tone = ${schedule.tone || 'professional'},
+                style = ${schedule.style || 'summary'}, category_filter = ${JSON.stringify(schedule.categoryFilter || [])},
+                is_active = ${schedule.isActive ?? true}, next_run_at = ${nextRunAt?.toISOString() ?? null}
+            WHERE id = ${schedule.id} RETURNING id
+        `
     } else {
-        result = await supabase
-            .from('newsletter_schedules')
-            .insert(data)
-            .select('id')
-            .single()
+        result = await sql`
+            INSERT INTO newsletter_schedules (name, frequency, day_of_week, day_of_month, time_of_day, tone, style, category_filter, is_active, next_run_at)
+            VALUES (${schedule.name}, ${schedule.frequency}, ${schedule.dayOfWeek ?? null}, ${schedule.dayOfMonth ?? null},
+                ${schedule.timeOfDay || '09:00:00'}, ${schedule.tone || 'professional'}, ${schedule.style || 'summary'},
+                ${JSON.stringify(schedule.categoryFilter || [])}, ${schedule.isActive ?? true}, ${nextRunAt?.toISOString() ?? null})
+            RETURNING id
+        `
     }
 
-    if (result.error) {
-        throw new Error(`Failed to save schedule: ${result.error.message}`)
-    }
-
-    return result.data.id
+    if (!result || result.length === 0) throw new Error('Failed to save schedule')
+    return result[0].id
 }
 
 /**

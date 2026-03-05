@@ -6,7 +6,7 @@
  */
 
 import { revalidatePath } from 'next/cache'
-import { createClient } from '@/lib/supabase/server'
+import { sql } from '@/lib/db/client'
 import {
     generatePost,
     generateTitles,
@@ -291,37 +291,12 @@ export async function fetchUrlContent(url: string) {
  * Schedule a post for publishing
  */
 export async function schedulePost(postId: string, scheduledFor: Date) {
-    const supabase = await createClient()
-
-    // Check if already scheduled
-    const { data: existing } = await supabase
-        .from('scheduled_posts')
-        .select('id')
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-        .single()
-
-    if (existing) {
-        // Update existing schedule
-        const { error } = await supabase
-            .from('scheduled_posts')
-            .update({ scheduled_for: scheduledFor.toISOString() })
-            .eq('id', existing.id)
-
-        if (error) throw error
+    const existing = await sql`SELECT id FROM scheduled_posts WHERE post_id = ${postId} AND status = 'pending' LIMIT 1`
+    if (existing && existing.length > 0) {
+        await sql`UPDATE scheduled_posts SET scheduled_for = ${scheduledFor.toISOString()} WHERE id = ${existing[0].id}`
     } else {
-        // Create new schedule
-        const { error } = await supabase
-            .from('scheduled_posts')
-            .insert({
-                post_id: postId,
-                scheduled_for: scheduledFor.toISOString(),
-                status: 'pending'
-            })
-
-        if (error) throw error
+        await sql`INSERT INTO scheduled_posts (post_id, scheduled_for, status) VALUES (${postId}, ${scheduledFor.toISOString()}, 'pending')`
     }
-
     revalidatePath('/cms/posts')
     return { success: true }
 }
@@ -330,16 +305,7 @@ export async function schedulePost(postId: string, scheduledFor: Date) {
  * Cancel scheduled publication
  */
 export async function cancelScheduledPost(postId: string) {
-    const supabase = await createClient()
-
-    const { error } = await supabase
-        .from('scheduled_posts')
-        .update({ status: 'cancelled' })
-        .eq('post_id', postId)
-        .eq('status', 'pending')
-
-    if (error) throw error
-
+    await sql`UPDATE scheduled_posts SET status = 'cancelled' WHERE post_id = ${postId} AND status = 'pending'`
     revalidatePath('/cms/posts')
     return { success: true }
 }
@@ -348,68 +314,35 @@ export async function cancelScheduledPost(postId: string) {
  * Get scheduled posts
  */
 export async function getScheduledPosts() {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('scheduled_posts')
-        .select(`
-            id,
-            scheduled_for,
-            status,
-            posts (id, title, slug, excerpt, cover_image_url)
-        `)
-        .eq('status', 'pending')
-        .order('scheduled_for', { ascending: true })
-
-    if (error) throw error
-    return data || []
+    return sql`
+        SELECT sp.id, sp.scheduled_for, sp.status,
+            p.id as post_id, p.title, p.slug, p.excerpt, p.cover_image_url
+        FROM scheduled_posts sp
+        LEFT JOIN posts p ON p.id = sp.post_id
+        WHERE sp.status = 'pending'
+        ORDER BY sp.scheduled_for ASC
+    ` as Promise<any[]>
 }
 
 /**
  * Get AI generation history
  */
 export async function getAIGenerationHistory(limit: number = 20) {
-    const supabase = await createClient()
-
-    const { data, error } = await supabase
-        .from('ai_generations')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit)
-
-    if (error) throw error
-    return data || []
+    return sql`SELECT * FROM ai_generations ORDER BY created_at DESC LIMIT ${limit}` as Promise<any[]>
 }
 
 /**
  * Get AI usage stats
  */
 export async function getAIUsageStats() {
-    const supabase = await createClient()
-
-    // Get stats for last 30 days
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-    const { data, error } = await supabase
-        .from('ai_generations')
-        .select('type, tokens_used, cost_usd, created_at')
-        .gte('created_at', thirtyDaysAgo.toISOString())
-
-    if (error) throw error
-
-    const stats = {
-        totalGenerations: data?.length || 0,
-        totalTokens: 0,
-        totalCost: 0,
-        byType: {} as Record<string, number>
-    }
-
+    const data = await sql`SELECT type, tokens_used, cost_usd FROM ai_generations WHERE created_at >= ${thirtyDaysAgo.toISOString()}`
+    const stats = { totalGenerations: data?.length || 0, totalTokens: 0, totalCost: 0, byType: {} as Record<string, number> }
     for (const gen of data || []) {
         stats.totalTokens += gen.tokens_used || 0
         stats.totalCost += parseFloat(String(gen.cost_usd)) || 0
         stats.byType[gen.type] = (stats.byType[gen.type] || 0) + 1
     }
-
     return stats
 }

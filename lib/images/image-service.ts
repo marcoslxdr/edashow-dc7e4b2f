@@ -5,7 +5,7 @@
 
 import { pexels, NormalizedImage as PexelsNormalizedImage } from './pexels'
 import { unsplash, NormalizedImage as UnsplashNormalizedImage } from './unsplash'
-import { createClient } from '@/lib/supabase/server'
+import { put } from '@vercel/blob'
 
 export type ImageProvider = 'pexels' | 'unsplash' | 'all'
 
@@ -79,7 +79,7 @@ export async function searchImages(options: ImageSearchOptions): Promise<ImageSe
                 perPage: provider === 'all' ? Math.ceil(perPage / 2) : perPage
             })
 
-            results.push(...pexelsResults.photos.map(p => pexels.normalizePhoto(p)))
+            results.push(...pexelsResults.photos.map((p: PexelsNormalizedImage) => pexels.normalizePhoto(p)))
             total += pexelsResults.total_results
         } catch (error) {
             console.error('Pexels search error:', error)
@@ -97,7 +97,7 @@ export async function searchImages(options: ImageSearchOptions): Promise<ImageSe
                 perPage: provider === 'all' ? Math.ceil(perPage / 2) : perPage
             })
 
-            results.push(...unsplashResults.results.map(p => unsplash.normalizePhoto(p)))
+            results.push(...unsplashResults.results.map((p: UnsplashNormalizedImage) => unsplash.normalizePhoto(p)))
             total += unsplashResults.total
         } catch (error) {
             console.error('Unsplash search error:', error)
@@ -122,7 +122,6 @@ export async function searchImages(options: ImageSearchOptions): Promise<ImageSe
  * Get suggestions for image search based on topic
  */
 export function getImageSearchSuggestions(topic: string): string[] {
-    // Common healthcare/dentistry related terms that work well for stock photos
     const healthcareTerms = [
         'healthcare', 'medical', 'doctor', 'hospital', 'health',
         'dentist', 'dental', 'teeth', 'smile', 'clinic',
@@ -131,12 +130,10 @@ export function getImageSearchSuggestions(topic: string): string[] {
 
     const suggestions = [topic]
 
-    // Add topic variations
     suggestions.push(`${topic} healthcare`)
     suggestions.push(`${topic} medical`)
     suggestions.push(`${topic} professional`)
 
-    // Check if topic contains healthcare terms
     const topicLower = topic.toLowerCase()
     if (!healthcareTerms.some(term => topicLower.includes(term))) {
         suggestions.push('healthcare professional')
@@ -147,15 +144,12 @@ export function getImageSearchSuggestions(topic: string): string[] {
 }
 
 /**
- * Download image and save to Supabase storage
+ * Download image and save to Vercel Blob storage
  */
 export async function downloadAndSaveImage(
     image: NormalizedImage,
     folder: string = 'posts'
 ): Promise<string> {
-    const supabase = await createClient()
-
-    // Download image
     const response = await fetch(image.downloadUrl)
     if (!response.ok) {
         throw new Error(`Failed to download image: ${response.statusText}`)
@@ -165,34 +159,20 @@ export async function downloadAndSaveImage(
     const arrayBuffer = await blob.arrayBuffer()
     const buffer = new Uint8Array(arrayBuffer)
 
-    // Generate filename
     const extension = image.downloadUrl.match(/\.(jpg|jpeg|png|webp)/i)?.[1] || 'jpg'
     const filename = `${folder}/${Date.now()}-${image.id.replace(/[^a-z0-9]/gi, '-')}.${extension}`
 
-    // Upload to Supabase storage
-    const { data, error } = await supabase.storage
-        .from(process.env.SUPABASE_BUCKET || 'edashow-media')
-        .upload(filename, buffer, {
-            contentType: blob.type || 'image/jpeg',
-            upsert: false
-        })
-
-    if (error) {
-        throw new Error(`Failed to upload image: ${error.message}`)
-    }
-
-    // Get public URL
-    const { data: publicUrl } = supabase.storage
-        .from(process.env.SUPABASE_BUCKET || 'edashow-media')
-        .getPublicUrl(data.path)
+    const uploadedBlob = await put(filename, buffer, {
+        access: 'public',
+        contentType: blob.type || 'image/jpeg',
+    })
 
     // Track download for Unsplash (required by their API guidelines)
     if (image.provider === 'unsplash' && image.downloadUrl.includes('unsplash')) {
-        // Note: In production, you should track the download_location from the original photo
         console.log('Unsplash download tracked for:', image.id)
     }
 
-    return publicUrl.publicUrl
+    return uploadedBlob.url
 }
 
 /**
@@ -233,7 +213,7 @@ export async function getCuratedImages(count: number = 10): Promise<NormalizedIm
     if (providers.pexels) {
         try {
             const pexelsResults = await pexels.getCurated(1, Math.ceil(count / 2))
-            results.push(...pexelsResults.photos.map(p => pexels.normalizePhoto(p)))
+            results.push(...pexelsResults.photos.map((p: PexelsNormalizedImage) => pexels.normalizePhoto(p)))
         } catch (error) {
             console.error('Pexels curated error:', error)
         }
@@ -242,7 +222,7 @@ export async function getCuratedImages(count: number = 10): Promise<NormalizedIm
     if (providers.unsplash) {
         try {
             const unsplashResults = await unsplash.getRandomPhotos(Math.ceil(count / 2), 'healthcare')
-            results.push(...unsplashResults.map(p => unsplash.normalizePhoto(p)))
+            results.push(...unsplashResults.map((p: UnsplashNormalizedImage) => unsplash.normalizePhoto(p)))
         } catch (error) {
             console.error('Unsplash random error:', error)
         }

@@ -5,7 +5,7 @@ const nextConfig = {
       bodySizeLimit: '10mb',
     },
     // Fix for webpack module errors
-    optimizePackageImports: ['@supabase/supabase-js', '@supabase/ssr'],
+    optimizePackageImports: ['@neondatabase/serverless'],
   },
 
   typescript: {
