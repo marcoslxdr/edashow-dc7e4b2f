@@ -56,10 +56,36 @@ export async function getPostBySlug(slug: string) {
       cover_image_url
     `)
         .eq('slug', slug)
+        .eq('status', 'published')
         .single()
 
     if (error) {
         console.error(`Error fetching post ${slug}:`, error)
+        return null
+    }
+
+    return normalizePostData(data)
+}
+
+/**
+ * Busca um post pelo slug sem filtrar por status.
+ * Usado para preview de rascunhos por editores autenticados.
+ */
+export async function getPostBySlugAnyStatus(slug: string) {
+    const supabase = getPublicSupabaseClient()
+    const { data, error } = await supabase
+        .from('posts')
+        .select(`
+      *,
+      category:categories(id, name, slug),
+      author:columnists(id, name, slug, bio, photo_url, instagram_url, twitter_url),
+      cover_image_url
+    `)
+        .eq('slug', slug)
+        .single()
+
+    if (error) {
+        console.error(`Error fetching post (any status) ${slug}:`, error)
         return null
     }
 

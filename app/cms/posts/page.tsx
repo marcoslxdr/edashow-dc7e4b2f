@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Plus, Search, RefreshCw, FileText, Calendar, Edit3, Trash2, ExternalLink, CheckSquare, Square } from 'lucide-react'
+import { Plus, Search, RefreshCw, FileText, Calendar, Edit3, Trash2, ExternalLink, Eye, CheckSquare, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { createClient } from '@/lib/supabase/client'
@@ -349,8 +349,16 @@ function PostCard({
                             {post.title}
                         </h3>
                         <div className="flex items-center gap-1 shrink-0">
-                            {/* View Post */}
-                            {postUrl && (
+                            {/* View Post / Preview */}
+                            {post.status === 'draft' ? (
+                                <a
+                                    href={`/cms/posts/${post.id}/preview`}
+                                    className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-purple-500 transition-colors"
+                                    title="Pré-visualizar rascunho"
+                                >
+                                    <Eye className="w-4 h-4" />
+                                </a>
+                            ) : postUrl ? (
                                 <a
                                     href={postUrl}
                                     target="_blank"
@@ -360,7 +368,7 @@ function PostCard({
                                 >
                                     <ExternalLink className="w-4 h-4" />
                                 </a>
-                            )}
+                            ) : null}
                             {/* Edit */}
                             <button
                                 onClick={onEdit}

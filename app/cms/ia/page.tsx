@@ -2,14 +2,13 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Sparkles, RefreshCw, Search, Settings } from 'lucide-react'
+import { Sparkles, Layers, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { GeneratePostTab } from '@/components/cms/ia/GeneratePostTab'
-import { RewriteContentTab } from '@/components/cms/ia/RewriteContentTab'
-import { SEOToolsTab } from '@/components/cms/ia/SEOToolsTab'
-import { AISettingsTab } from '@/components/cms/ia/AISettingsTab'
+import { BatchGenerateTab } from '@/components/cms/ia/BatchGenerateTab'
+import { KeywordsTab } from '@/components/cms/ia/KeywordsTab'
 
-type TabId = 'gerar' | 'reescrever' | 'seo' | 'configuracoes'
+type TabId = 'gerar' | 'lote' | 'palavras-chave'
 
 interface Tab {
     id: TabId
@@ -20,9 +19,8 @@ interface Tab {
 
 const tabs: Tab[] = [
     { id: 'gerar', label: 'Gerar Post', icon: Sparkles, component: GeneratePostTab },
-    { id: 'reescrever', label: 'Reescrever', icon: RefreshCw, component: RewriteContentTab },
-    { id: 'seo', label: 'SEO', icon: Search, component: SEOToolsTab },
-    { id: 'configuracoes', label: 'Configurações', icon: Settings, component: AISettingsTab }
+    { id: 'lote', label: 'Gerar em Lote', icon: Layers, component: BatchGenerateTab },
+    { id: 'palavras-chave', label: 'Palavras-chave', icon: Tag, component: KeywordsTab }
 ]
 
 export default function IAPage() {
@@ -37,14 +35,11 @@ export default function IAPage() {
         return 'gerar'
     })
 
-    // Update URL when tab changes
     const handleTabChange = (tabId: TabId) => {
         setActiveTab(tabId)
-        const newUrl = `/cms/ia?tab=${tabId}`
-        router.push(newUrl, { scroll: false })
+        router.push(`/cms/ia?tab=${tabId}`, { scroll: false })
     }
 
-    // Sync with URL changes
     useEffect(() => {
         if (tabFromUrl && tabs.find(t => t.id === tabFromUrl) && tabFromUrl !== activeTab) {
             setActiveTab(tabFromUrl)
@@ -55,7 +50,7 @@ export default function IAPage() {
 
     return (
         <div className="h-full flex flex-col bg-gray-50">
-            {/* Tabs Header - Fixed at top */}
+            {/* Header */}
             <div className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-10">
                 <div className="px-6 py-4">
                     <div className="flex items-center gap-3 mb-4">
@@ -64,10 +59,10 @@ export default function IAPage() {
                         </div>
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">AI Content Studio</h1>
-                            <p className="text-sm text-gray-500">Crie e otimize conteúdo com inteligência artificial</p>
+                            <p className="text-sm text-gray-500">Crie conteúdo com inteligência artificial</p>
                         </div>
                     </div>
-                    <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                    <div className="flex gap-2">
                         {tabs.map((tab) => {
                             const Icon = tab.icon
                             const isActive = activeTab === tab.id
@@ -95,7 +90,7 @@ export default function IAPage() {
                 </div>
             </div>
 
-            {/* Content Area - Scrollable */}
+            {/* Content */}
             <div className="flex-1 overflow-y-auto">
                 <div className="p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <ActiveComponent />

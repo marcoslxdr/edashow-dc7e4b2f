@@ -86,9 +86,7 @@ export async function updateSiteSettings(settings: Partial<SiteSettings>): Promi
 }
 
 export async function uploadSiteLogo(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
-    const supabase = await createAdminClient()
-
-    // Use admin client to bypass RLS
+    const supabase = createAdminClient()
 
     const file = formData.get('file') as File
     if (!file) {
@@ -97,8 +95,9 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
 
     const fileExt = file.name.split('.').pop()
     const fileName = `site-logo-${Date.now()}.${fileExt}`
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
 
-    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
+    console.log('[uploadSiteLogo] bucket:', bucket, '| file:', fileName)
 
     const { data, error } = await supabase.storage
         .from(bucket)
@@ -108,18 +107,20 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
         })
 
     if (error) {
-        console.error('Error uploading logo:', error)
-        return { success: false, error: error.message }
+        console.error('[uploadSiteLogo] Storage error:', error)
+        return { success: false, error: `[storage] ${error.message}` }
     }
 
     const { data: { publicUrl } } = supabase.storage
         .from(bucket)
         .getPublicUrl(`branding/${fileName}`)
 
-    // Update settings with new logo URL
+    console.log('[uploadSiteLogo] Upload OK, URL:', publicUrl)
+
     const updateResult = await updateSiteSettings({ logo_url: publicUrl })
     if (!updateResult.success) {
-        return { success: false, error: updateResult.error }
+        console.error('[uploadSiteLogo] updateSiteSettings error:', updateResult.error)
+        return { success: false, error: `[db] ${updateResult.error}` }
     }
 
     return { success: true, url: publicUrl }
@@ -138,7 +139,7 @@ export async function uploadFavicon(formData: FormData): Promise<{ success: bool
     const fileExt = file.name.split('.').pop()
     const fileName = `favicon-${Date.now()}.${fileExt}`
 
-    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
 
     const { data, error } = await supabase.storage
         .from(bucket)

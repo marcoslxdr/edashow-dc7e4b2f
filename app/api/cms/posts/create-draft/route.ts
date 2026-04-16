@@ -13,30 +13,14 @@ export async function POST(req: Request) {
             slug: body.slug,
             excerpt: body.excerpt,
             content: body.content,
-            meta_description: body.metaDescription, // Ensure casing matches DB (savePost normalizes this?)
-            // savePost expects camelCase for internal logic but maps to snake_case for DB if manual?
-            // checking savePost implementation: it does const { id, categories, columnists, ...postData } = data
-            // and then insert([normalizedData]).
-            // So we should provide keys matching the DB columns or what savePost expects.
-            // savePost doesn't seem to do deep key mapping (camelToSnake).
-            // Let's assume keys should be snake_case for DB.
-            // Wait, savePost checks `normalizedData.published_at`.
-            // It seems it takes whatever is passed.
-            // I should verify DB schema columns.
-            // Based on `normalizedData.featured_home`, it seems snake_case is expected.
-            
+            meta_description: body.metaDescription || body.meta_description || '',
+            cover_image_url: body.coverImageUrl || body.cover_image_url || '',
             tags: body.suggestedTags || body.tags || [],
             status: 'draft',
-            category_id: null, // User will set this in editor
+            category_id: null,
             columnist_id: null,
             featured_home: false,
             featured_category: false
-        }
-
-        // Map camelCase from AI to snake_case for DB if needed
-        // generatedPost has metaDescription. DB likely has meta_description.
-        if (body.metaDescription) {
-            (postData as any).meta_description = body.metaDescription
         }
 
         const savedPost = await savePost(postData)

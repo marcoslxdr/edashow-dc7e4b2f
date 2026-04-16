@@ -14,7 +14,12 @@ export const openrouter = createOpenAI({
 });
 
 /**
- * Default model for generations
+ * Default model for generations - Gemini 2.5 Flash
  */
-export const DEFAULT_MODEL = 'deepseek/deepseek-chat'; // DeepSeek V3 - Excellent for writing & code
-export const PREMIUM_MODEL = 'deepseek/deepseek-chat';
+export const DEFAULT_MODEL = 'google/gemini-2.5-flash-preview-05-20';
+export const PREMIUM_MODEL = 'google/gemini-2.5-flash-preview-05-20';
+
+/**
+ * Image generation model - Gemini 2.5 Flash Image (Nano Banana)
+ */
+export const IMAGE_MODEL = 'google/gemini-2.5-flash-image-preview';

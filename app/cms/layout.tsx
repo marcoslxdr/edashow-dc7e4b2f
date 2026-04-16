@@ -25,7 +25,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import Image from 'next/image'
 import { isAuthenticated, logout, getCurrentUser } from '@/lib/actions/cms-auth'
 import { cn } from '@/lib/utils'
 
@@ -119,25 +118,6 @@ export default function CMSLayout({ children }: { children: React.ReactNode }) {
                         : "w-20 -translate-x-full lg:translate-x-0"
                 )}
             >
-                <div className={cn("h-16 flex items-center border-b border-gray-200 overflow-hidden", isSidebarOpen ? "px-6" : "justify-center")}>
-                    <Link href="/cms/dashboard" className="flex items-center gap-3">
-                        <div className="relative w-10 h-10 shrink-0">
-                            <Image
-                                src="/placeholder-logo.svg"
-                                alt="EDA Show"
-                                width={40}
-                                height={40}
-                                className="object-contain"
-                                priority
-                            />
-                        </div>
-                        {isSidebarOpen && (
-                            <span className="font-bold text-xl tracking-tighter text-gray-900 whitespace-nowrap">
-                                EDA<span className="text-orange-600">SHOW</span>
-                            </span>
-                        )}
-                    </Link>
-                </div>
 
                 {/* Navigation Items */}
                 <nav className="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">

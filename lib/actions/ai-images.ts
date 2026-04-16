@@ -190,7 +190,7 @@ export async function uploadImageFromUrl(
 }
 
 // ============================================
-// AI-Powered Cover Image Search (Pexels - FREE)
+// AI-Powered Cover Image (Gemini + Pexels)
 // ============================================
 
 export interface CoverImageRequest {
@@ -199,13 +199,43 @@ export interface CoverImageRequest {
     count?: number
 }
 
+export interface GenerateImageRequest {
+    title: string
+    content?: string
+    customPrompt?: string
+}
+
 /**
  * Check which AI image providers are available
  */
 export async function checkAIImageProviders(): Promise<{
     pexels: boolean
+    gemini: boolean
 }> {
-    return getAIImageProviders()
+    return {
+        ...getAIImageProviders(),
+        gemini: !!process.env.OPENROUTER_API_KEY
+    }
+}
+
+/**
+ * Generate a cover image using Gemini 2.5 Flash Image (Nano Banana)
+ */
+export async function generateAICoverImage(
+    request: GenerateImageRequest
+): Promise<{ url: string; source: 'gemini'; error: string | null }> {
+    try {
+        const { generateAICoverImage: generateImage } = await import('@/lib/ai/gemini-image-generator')
+        const result = await generateImage(request.title, request.content, request.customPrompt)
+        return { url: result.url, source: 'gemini', error: null }
+    } catch (error) {
+        console.error('Gemini image generation error:', error)
+        return {
+            url: '',
+            source: 'gemini',
+            error: error instanceof Error ? error.message : 'Erro ao gerar imagem com IA'
+        }
+    }
 }
 
 /**
@@ -238,8 +268,12 @@ export async function getAIVisualKeywords(
  */
 export async function selectAICoverImage(
     imageUrl: string,
-    source: 'pexels' | 'unsplash'
+    source: 'pexels' | 'unsplash' | 'gemini'
 ): Promise<{ url: string | null; error: string | null }> {
+    // Gemini images are already in storage
+    if (source === 'gemini') {
+        return { url: imageUrl, error: null }
+    }
     try {
         // Fetch the image
         const response = await fetch(imageUrl)

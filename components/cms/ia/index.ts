@@ -1,4 +1,6 @@
 export { GeneratePostTab } from './GeneratePostTab'
+export { BatchGenerateTab } from './BatchGenerateTab'
+export { KeywordsTab } from './KeywordsTab'
 export { RewriteContentTab } from './RewriteContentTab'
 export { SEOToolsTab } from './SEOToolsTab'
 export { AISettingsTab } from './AISettingsTab'

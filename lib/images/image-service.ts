@@ -171,7 +171,7 @@ export async function downloadAndSaveImage(
 
     // Upload to Supabase storage
     const { data, error } = await supabase.storage
-        .from(process.env.SUPABASE_BUCKET || 'edashow-media')
+        .from(process.env.SUPABASE_BUCKET || 'media')
         .upload(filename, buffer, {
             contentType: blob.type || 'image/jpeg',
             upsert: false
@@ -183,7 +183,7 @@ export async function downloadAndSaveImage(
 
     // Get public URL
     const { data: publicUrl } = supabase.storage
-        .from(process.env.SUPABASE_BUCKET || 'edashow-media')
+        .from(process.env.SUPABASE_BUCKET || 'media')
         .getPublicUrl(data.path)
 
     // Track download for Unsplash (required by their API guidelines)

@@ -1,4 +1,5 @@
-import { getPostBySlug, getImageUrl, getSponsors } from '@/lib/supabase/api'
+import { getPostBySlug, getPostBySlugAnyStatus, getImageUrl, getSponsors } from '@/lib/supabase/api'
+import { createClient as createServerSupabaseClient } from '@/lib/supabase/server'
 import { normalizePostContent } from '@/lib/utils/post-content'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
@@ -14,6 +15,7 @@ import { PostImageGallery } from '@/components/post-image-gallery'
 import { RelatedPosts } from '@/components/related-posts'
 import { SocialShare } from '@/components/social-share'
 import { MobileQuickShare } from '@/components/mobile-quick-share'
+import { DraftPreviewBanner } from '@/components/DraftPreviewBanner'
 
 // Força renderização dinâmica para evitar erros de serialização durante build
 export const dynamic = 'force-dynamic'
@@ -25,14 +27,51 @@ interface PostPageProps {
   }>
 }
 
+/**
+ * Verifica se o usuário atual é admin/editor autenticado.
+ */
+async function isAuthenticatedEditor(): Promise<boolean> {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return false
+
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+
+    return !!roleData && (roleData.role === 'admin' || roleData.role === 'editor')
+  } catch {
+    return false
+  }
+}
+
 // Metadados da página
 export async function generateMetadata({ params }: PostPageProps) {
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  let post = await getPostBySlug(slug)
+
+  // Se não encontrou publicado, tenta buscar rascunho para editor
+  if (!post) {
+    const isEditor = await isAuthenticatedEditor()
+    if (isEditor) {
+      post = await getPostBySlugAnyStatus(slug)
+    }
+  }
 
   if (!post) {
     return {
       title: 'Post não encontrado',
+    }
+  }
+
+  // Rascunhos não devem ser indexados
+  if (post.status !== 'published') {
+    return {
+      title: `[Rascunho] ${post.title} | EdaShow`,
+      robots: { index: false, follow: false },
     }
   }
 
@@ -75,7 +114,19 @@ export async function generateMetadata({ params }: PostPageProps) {
 
 export default async function PostPage({ params }: PostPageProps) {
   const { slug } = await params
-  const post = await getPostBySlug(slug)
+  let post = await getPostBySlug(slug)
+  let isDraftPreview = false
+
+  // Se não encontrou post publicado, tenta buscar rascunho para editores
+  if (!post) {
+    const isEditor = await isAuthenticatedEditor()
+    if (isEditor) {
+      post = await getPostBySlugAnyStatus(slug)
+      if (post && post.status !== 'published') {
+        isDraftPreview = true
+      }
+    }
+  }
 
   if (!post) {
     notFound()
@@ -88,6 +139,9 @@ export default async function PostPage({ params }: PostPageProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Banner de preview de rascunho */}
+      {isDraftPreview && <DraftPreviewBanner postId={post.id} postSlug={slug} />}
+
       {/* Hero Header com Imagem Destacada */}
       {post.featured_image ? (
         <section className="relative w-full h-[60vh] min-h-[400px] overflow-hidden">

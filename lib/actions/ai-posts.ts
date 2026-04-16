@@ -50,12 +50,15 @@ export interface AIGeneratedPost {
 export async function checkAIConfiguration(): Promise<{
     configured: boolean
     openrouter: boolean
+    gemini: boolean
     pexels: boolean
     unsplash: boolean
 }> {
+    const hasOpenRouter = !!process.env.OPENROUTER_API_KEY
     return {
-        configured: !!process.env.OPENROUTER_API_KEY,
-        openrouter: !!process.env.OPENROUTER_API_KEY,
+        configured: hasOpenRouter,
+        openrouter: hasOpenRouter,
+        gemini: hasOpenRouter, // Gemini models accessed via OpenRouter
         pexels: !!process.env.PEXELS_API_KEY,
         unsplash: !!process.env.UNSPLASH_ACCESS_KEY
     }

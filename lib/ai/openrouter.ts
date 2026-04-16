@@ -59,6 +59,12 @@ export interface OpenRouterModel {
 
 // Popular models for quick reference
 export const MODELS = {
+    // Gemini (default)
+    GEMINI_25_FLASH: 'google/gemini-2.5-flash-preview-05-20',
+    GEMINI_25_FLASH_IMAGE: 'google/gemini-2.5-flash-image-preview',
+    GEMINI_FLASH: 'google/gemini-flash-1.5',
+    GEMINI_PRO: 'google/gemini-pro-1.5',
+
     // Free models
     FREE_LLAMA: 'meta-llama/llama-3.2-3b-instruct:free',
     FREE_GEMMA: 'google/gemma-2-9b-it:free',
@@ -67,13 +73,11 @@ export const MODELS = {
     // Fast & cheap
     CLAUDE_HAIKU: 'anthropic/claude-3-haiku',
     GPT_4O_MINI: 'openai/gpt-4o-mini',
-    GEMINI_FLASH: 'google/gemini-flash-1.5',
     GLM_FLASH: 'z-ai/glm-4.7-flash',
 
     // Quality
     CLAUDE_SONNET: 'anthropic/claude-3.5-sonnet',
     GPT_4O: 'openai/gpt-4o',
-    GEMINI_PRO: 'google/gemini-pro-1.5',
 
     // Premium
     CLAUDE_OPUS: 'anthropic/claude-3-opus',
@@ -88,7 +92,7 @@ class OpenRouterClient {
 
     constructor() {
         this.apiKey = process.env.OPENROUTER_API_KEY
-        this.defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || MODELS.FREE_LLAMA
+        this.defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || MODELS.GEMINI_25_FLASH
     }
 
     private getHeaders(): HeadersInit {
@@ -282,12 +286,14 @@ class OpenRouterClient {
     calculateCost(model: string, promptTokens: number, completionTokens: number): number {
         // Approximate pricing (per 1M tokens)
         const pricing: Record<string, { prompt: number; completion: number }> = {
+            'google/gemini-2.5-flash-preview-05-20': { prompt: 0.15, completion: 0.60 },
+            'google/gemini-2.5-flash-image-preview': { prompt: 0.10, completion: 0.40 },
+            'google/gemini-flash-1.5': { prompt: 0.075, completion: 0.30 },
             'anthropic/claude-3-haiku': { prompt: 0.25, completion: 1.25 },
             'anthropic/claude-3.5-sonnet': { prompt: 3, completion: 15 },
             'anthropic/claude-3-opus': { prompt: 15, completion: 75 },
             'openai/gpt-4o-mini': { prompt: 0.15, completion: 0.60 },
             'openai/gpt-4o': { prompt: 2.50, completion: 10 },
-            'google/gemini-flash-1.5': { prompt: 0.075, completion: 0.30 },
             'z-ai/glm-4.7-flash': { prompt: 0.05, completion: 0.10 },
         }
 

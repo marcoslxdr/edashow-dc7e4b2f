@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(arrayBuffer)
 
     const supabase = createAdminClient()
-    const bucket = process.env.SUPABASE_BUCKET || 'edashow-media'
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
 
     const { data: storageData, error: storageError } = await supabase.storage
         .from(bucket)

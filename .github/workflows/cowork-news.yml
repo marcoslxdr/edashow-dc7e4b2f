@@ -1,0 +1,58 @@
+name: Cowork News Pipeline
+
+on:
+  schedule:
+    # 11:00 UTC = 08:00 BRT (Brasilia)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+    # Permite execucao manual pelo GitHub Actions UI
+
+jobs:
+  generate-news:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Generate news posts
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          echo "========================================="
+          echo "Cowork News Pipeline — $(date -u '+%Y-%m-%d %H:%M UTC')"
+          echo "========================================="
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$SITE_URL/api/cron/cowork-news" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"topic": "saude suplementar", "count": 5}' \
+            --max-time 300)
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo ""
+          echo "Status: $HTTP_CODE"
+          echo ""
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            # Show count
+            COUNT=$(echo "$BODY" | jq -r '.count // 0')
+            echo "Posts gerados: $COUNT"
+            echo ""
+
+            # Show WhatsApp message
+            echo "========================================="
+            echo "MENSAGEM WHATSAPP:"
+            echo "========================================="
+            echo "$BODY" | jq -r '.whatsappMessage // "Nenhuma mensagem"'
+            echo "========================================="
+
+            # Show post details
+            echo ""
+            echo "Posts:"
+            echo "$BODY" | jq -r '.posts[] | "  - \(.title) [\(.id)]"' 2>/dev/null
+          else
+            echo "ERRO: Pipeline falhou com status $HTTP_CODE"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+            exit 1
+          fi

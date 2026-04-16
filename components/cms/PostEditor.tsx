@@ -84,6 +84,7 @@ export function PostEditor({ post, categories, columnists }: PostEditorProps) {
                         slug: parsed.slug || slugify(parsed.title || ''),
                         excerpt: parsed.excerpt || prev.excerpt,
                         content: parsed.content || prev.content,
+                        cover_image_url: parsed.coverImageUrl || prev.cover_image_url,
                         category_id: parsed.categoryId || prev.category_id,
                         tags: parsed.suggestedTags || prev.tags
                     }))

@@ -71,9 +71,11 @@ export async function uploadMedia(formData: FormData) {
         finalSize = file.size
     }
 
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
+
     // 1. Upload file to storage
     const { data: storageData, error: storageError } = await supabase.storage
-        .from('edashow-media')
+        .from(bucket)
         .upload(finalFilename, fileBuffer, {
             contentType: finalMimeType
         })
@@ -82,7 +84,7 @@ export async function uploadMedia(formData: FormData) {
 
     // 2. Get public URL
     const { data: { publicUrl } } = supabase.storage
-        .from('edashow-media')
+        .from(bucket)
         .getPublicUrl(finalFilename)
 
     // 3. Save reference in media table
@@ -111,9 +113,11 @@ export async function deleteMedia(id: string, filename: string) {
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
+
     // 1. Delete from storage
     const { error: storageError } = await supabase.storage
-        .from('edashow-media')
+        .from(bucket)
         .remove([filename])
 
     if (storageError) throw storageError

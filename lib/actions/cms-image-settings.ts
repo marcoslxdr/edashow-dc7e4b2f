@@ -110,9 +110,11 @@ export async function uploadWatermarkLogo(formData: FormData): Promise<{ success
 
     const filename = `watermark/logo-${Date.now()}.png`
 
+    const bucket = process.env.SUPABASE_BUCKET || 'media'
+
     // Upload to storage
     const { data: storageData, error: storageError } = await supabase.storage
-        .from('edashow-media')
+        .from(bucket)
         .upload(filename, file, {
             upsert: true
         })
@@ -124,7 +126,7 @@ export async function uploadWatermarkLogo(formData: FormData): Promise<{ success
 
     // Get public URL
     const { data: { publicUrl } } = supabase.storage
-        .from('edashow-media')
+        .from(bucket)
         .getPublicUrl(filename)
 
     // Update settings with new logo URL

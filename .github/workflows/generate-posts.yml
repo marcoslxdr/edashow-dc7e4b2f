@@ -1,0 +1,60 @@
+name: Generate Daily Posts
+
+on:
+  schedule:
+    # 12:00 UTC = 09:00 BRT (Brasília)
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    # Permite execução manual pelo GitHub Actions UI
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate 5 posts
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          SUCCESS=0
+          ERRORS=0
+
+          for i in 1 2 3 4 5; do
+            echo "========================================="
+            echo "Generating post $i of 5..."
+            echo "========================================="
+
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$SITE_URL/api/cron/generate-posts" \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              -H "Content-Type: application/json")
+
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
+            echo "Status: $HTTP_CODE"
+            echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              SUCCESS=$((SUCCESS + 1))
+            else
+              ERRORS=$((ERRORS + 1))
+            fi
+
+            echo ""
+
+            # Wait between requests to avoid overload
+            if [ "$i" -lt 5 ]; then
+              echo "Waiting 10 seconds..."
+              sleep 10
+            fi
+          done
+
+          echo "========================================="
+          echo "SUMMARY: $SUCCESS success, $ERRORS errors"
+          echo "========================================="
+
+          # Fail the workflow if all posts failed
+          if [ "$SUCCESS" -eq 0 ]; then
+            echo "All posts failed to generate!"
+            exit 1
+          fi
