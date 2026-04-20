@@ -21,6 +21,174 @@ import { DraftPreviewBanner } from '@/components/DraftPreviewBanner'
 export const dynamic = 'force-dynamic'
 export const dynamicParams = true
 
+/**
+ * Extrai o ID de um vídeo do YouTube a partir de uma URL
+ */
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ]
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+/**
+ * Converte URLs do YouTube em embeds responsivos
+ */
+function embedYouTubeLinks(html: string): string {
+  // Match YouTube URLs that are standalone (in their own <p> tag or as plain text on a line)
+  // Pattern 1: URLs inside <a> tags within <p> tags
+  html = html.replace(
+    /<p[^>]*>\s*<a[^>]*href=["'](https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)[^"']+)["'][^>]*>[^<]*<\/a>\s*<\/p>/gi,
+    (match, url) => {
+      const videoId = extractYouTubeId(url)
+      if (videoId) {
+        return `<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      }
+      return match
+    }
+  )
+
+  // Pattern 2: Plain YouTube URLs inside <p> tags (not wrapped in <a>)
+  html = html.replace(
+    /<p[^>]*>\s*(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)[^\s<]+)\s*<\/p>/gi,
+    (match, url) => {
+      const videoId = extractYouTubeId(url)
+      if (videoId) {
+        return `<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      }
+      return match
+    }
+  )
+
+  // Pattern 3: Plain YouTube URLs that are standalone text (not in HTML tags)
+  html = html.replace(
+    /(?:^|\n)\s*(https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)[^\s<\n]+)\s*(?:\n|$)/gi,
+    (match, url) => {
+      const videoId = extractYouTubeId(url)
+      if (videoId) {
+        return `\n<div class="youtube-embed"><iframe src="https://www.youtube.com/embed/${videoId}" title="YouTube video" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>\n`
+      }
+      return match
+    }
+  )
+
+  return html
+}
+
+/**
+ * Converte texto com formatação simples (markdown-like) para HTML
+ */
+function convertMarkdownToHtml(text: string): string {
+  let content = text
+
+  // Bold: **text** ou __text__
+  content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  content = content.replace(/__(.+?)__/g, '<strong>$1</strong>')
+
+  // Italic: *text* ou _text_ (somente quando delimitado por espaço ou início/fim de linha)
+  content = content.replace(/(^|\s)\*([^\s*](?:[^*]*[^\s*])?)\*(\s|$)/gm, '$1<em>$2</em>$3')
+  content = content.replace(/(^|\s)_([^\s_](?:[^_]*[^\s_])?)_(\s|$)/gm, '$1<em>$2</em>$3')
+
+  // Strikethrough: ~~text~~
+  content = content.replace(/~~(.+?)~~/g, '<del>$1</del>')
+
+  // Inline code: `code`
+  content = content.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+  // Headings: # ## ###
+  content = content.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  content = content.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  content = content.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+
+  // Horizontal rules: --- or ***
+  content = content.replace(/^(?:---|\*\*\*|___)$/gm, '<hr />')
+
+  // Blockquotes: > text
+  content = content.replace(/^> (.+)$/gm, '<blockquote><p>$1</p></blockquote>')
+  // Merge consecutive blockquotes
+  content = content.replace(/<\/blockquote>\n<blockquote>/g, '\n')
+
+  // Unordered lists: - item or • item or * item (at start of line)
+  content = content.replace(/^(?:[•\-\*])\s+(.+)$/gm, '<li>$1</li>')
+  content = content.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+
+  // Links: [text](url)
+  content = content.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+
+  // Convert plain URLs to links (skip if already inside HTML tags)
+  content = content.replace(
+    /(^|[\s>])(https?:\/\/[^\s<>"]+)/gm,
+    (match, prefix, url) => {
+      // Skip if this URL is already inside an href or src attribute
+      if (prefix === '"' || prefix === "'") return match
+      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    }
+  )
+
+  return content
+}
+
+/**
+ * Normaliza o HTML do conteúdo do post
+ * Suporta conteúdo HTML do TipTap, markdown e texto simples
+ * Embeds automáticos do YouTube
+ */
+function normalizePostContent(html: string): string {
+  if (!html) return ''
+
+  let content = html.trim()
+  if (!content) return ''
+
+  // Detecta se o conteúdo é predominantemente HTML (do TipTap) ou texto simples/markdown
+  const hasHtmlTags = /<(?:p|h[1-6]|ul|ol|div|blockquote|pre|table|figure)[^>]*>/i.test(content)
+
+  if (!hasHtmlTags) {
+    // Conteúdo é texto simples ou markdown - converter para HTML
+    content = convertMarkdownToHtml(content)
+
+    // Envolve linhas soltas em parágrafos (que não são já tags HTML)
+    const lines = content.split(/\n\n+/)
+    content = lines
+      .map(line => {
+        const trimmed = line.trim()
+        if (!trimmed) return ''
+        // Se já é uma tag de bloco, não envolve em <p>
+        if (/^<(?:h[1-6]|ul|ol|li|blockquote|div|hr|pre|table|figure)[\s>]/i.test(trimmed)) {
+          return trimmed
+        }
+        // Converte quebras de linha simples em <br>
+        const withBreaks = trimmed.replace(/\n/g, '<br />')
+        return `<p>${withBreaks}</p>`
+      })
+      .filter(Boolean)
+      .join('\n')
+  } else {
+    // Conteúdo HTML - aplicar conversão markdown dentro de parágrafos para conteúdo misto
+    // (ex: texto com **bold** dentro de tags <p>)
+    content = content.replace(
+      /(<p[^>]*>)(.*?)(<\/p>)/gs,
+      (match, open, inner, close) => {
+        let processed = inner
+        processed = processed.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        processed = processed.replace(/__(.+?)__/g, '<strong>$1</strong>')
+        processed = processed.replace(/(^|\s)\*([^\s*](?:[^*]*[^\s*])?)\*(\s|$)/gm, '$1<em>$2</em>$3')
+        processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>')
+        return `${open}${processed}${close}`
+      }
+    )
+  }
+
+  // Embed YouTube links
+  content = embedYouTubeLinks(content)
+
+  return content
+}
+
 interface PostPageProps {
   params: Promise<{
     slug: string

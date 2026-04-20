@@ -128,10 +128,10 @@ export function PostPreview({ post, readingTime, wordCount }: PostPreviewProps) 
                         {/* Content */}
                         <div
                             className={cn(
-                                "prose prose-orange max-w-none",
+                                "prose prose-orange max-w-none tiptap-content",
                                 viewMode === 'desktop'
-                                    ? "prose-base prose-p:text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-blockquote:border-orange-500 prose-blockquote:bg-orange-500/5 prose-blockquote:py-1 prose-img:rounded-xl"
-                                    : "prose-sm prose-p:text-gray-600 prose-headings:text-gray-800 prose-strong:text-gray-800 prose-img:rounded-lg"
+                                    ? "prose-base"
+                                    : "prose-sm"
                             )}
                             dangerouslySetInnerHTML={{
                                 __html: post.content || '<p class="text-gray-400 italic text-sm">Comece a escrever para ver o conteúdo...</p>'

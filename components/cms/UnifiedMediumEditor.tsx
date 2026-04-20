@@ -10,6 +10,7 @@ import Link from '@tiptap/extension-link'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import TextAlign from '@tiptap/extension-text-align'
+import Youtube from '@tiptap/extension-youtube'
 
 import {
     Bold,
@@ -43,7 +44,8 @@ import {
     X,
     Sparkles,
     Wand2,
-    Mic
+    Mic,
+    Video
 } from 'lucide-react'
 import { AIBubbleMenu } from './ai/AIBubbleMenu'
 import { cn } from '@/lib/utils'
@@ -141,6 +143,15 @@ export function UnifiedMediumEditor({
                 placeholder: 'Comece a escrever sua história...',
             }),
             CharacterCount,
+            Youtube.configure({
+                HTMLAttributes: {
+                    class: 'youtube-embed-wrapper',
+                },
+                width: 0,
+                height: 0,
+                nocookie: true,
+                modestBranding: true,
+            }),
         ],
         content,
         onUpdate: ({ editor }) => {
@@ -235,6 +246,14 @@ export function UnifiedMediumEditor({
             e.target.value = ''
         }
     }, [onCoverImageChange])
+
+    const addYouTubeVideo = useCallback(() => {
+        if (!editor) return
+        const url = window.prompt('URL do vídeo do YouTube:')
+        if (url) {
+            editor.commands.setYoutubeVideo({ src: url })
+        }
+    }, [editor])
 
     const setLink = useCallback(() => {
         if (!editor) return
@@ -646,6 +665,12 @@ export function UnifiedMediumEditor({
                     title="Lista"
                 >
                     <List className="w-4 h-4" />
+                </FloatingButton>
+                <FloatingButton
+                    onClick={addYouTubeVideo}
+                    title="Vídeo do YouTube"
+                >
+                    <Video className="w-4 h-4" />
                 </FloatingButton>
             </FloatingMenu>
         </div>
