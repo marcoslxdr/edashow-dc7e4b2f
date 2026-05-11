@@ -264,6 +264,10 @@ export async function getPostForPreview(id: string) {
         return null
     }
 
+    if (!data) {
+        console.warn(`[getPostForPreview] Post nao encontrado: ${id}`)
+        return null
+    }
 
     return {
         ...data,

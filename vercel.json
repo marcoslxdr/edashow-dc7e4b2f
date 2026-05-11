@@ -4,20 +4,13 @@
   "installCommand": "pnpm install",
   "framework": "nextjs",
   "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/daily-posts",
+      "schedule": "0 11 * * *"
+    }
+  ],
   "env": {
     "TURBOPACK": "0"
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

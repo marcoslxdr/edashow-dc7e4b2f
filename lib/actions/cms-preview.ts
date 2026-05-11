@@ -43,12 +43,47 @@ export async function generatePreviewToken(postId: string) {
     return data
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function isUUID(val: string) {
+  return UUID_RE.test(val)
+}
+
 /**
- * Get a post by its preview token.
- * Validates token existence and expiration.
+ * Get a post by its preview token OR by direct post UUID.
+ * This allows public preview links using either format.
  */
-export async function getPostByPreviewToken(token: string) {
+export async function getPostByPreviewToken(tokenOrId: string) {
     const supabase = createAdminClient()
+
+    // If it looks like a UUID, fetch post directly
+    if (isUUID(tokenOrId)) {
+      const { data: post, error: postError } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', tokenOrId)
+        .maybeSingle()
+
+      if (postError) {
+        console.error('[getPostByPreviewToken] uuid query error:', postError)
+        return null
+      }
+      if (!post) {
+        return null
+      }
+
+      return {
+        token: { post_id: tokenOrId, status: 'pending' },
+        post: {
+          ...post,
+          featured_image: post.cover_image_url
+            ? { url: post.cover_image_url, alt_text: post.title || 'Imagem do post' }
+            : null,
+        },
+      }
+    }
+
+    // Otherwise, try token lookup (original behavior)
 
     // Find the token
     const { data: tokenData, error: tokenError } = await supabase
