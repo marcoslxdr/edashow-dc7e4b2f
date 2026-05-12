@@ -3,9 +3,12 @@
  * Suggests keywords and analyzes topics for SEO optimization
  */
 
-import { generateObject } from 'ai'
 import { z } from 'zod'
-import { openrouter, DEFAULT_MODEL } from './vercel-ai'
+import { openrouter } from './openrouter'
+
+function getModel(model?: string): string {
+    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20'
+}
 
 export interface KeywordSuggestion {
     primary: string[]
@@ -14,9 +17,9 @@ export interface KeywordSuggestion {
 }
 
 const KeywordSuggestionSchema = z.object({
-    primary: z.array(z.string()).describe('Até 3 palavras-chave principais de alto volume'),
-    secondary: z.array(z.string()).describe('Até 5 palavras-chave secundárias'),
-    longTail: z.array(z.string()).describe('Até 5 palavras-chave de cauda longa específicas')
+    primary: z.array(z.string()),
+    secondary: z.array(z.string()),
+    longTail: z.array(z.string()),
 })
 
 /**
@@ -36,14 +39,14 @@ Considere:
 - Variações e sinônimos
 - Palavras-chave de cauda longa (long-tail) mais específicas`
 
-    const { object } = await generateObject({
-        model: openrouter(DEFAULT_MODEL),
-        schema: KeywordSuggestionSchema,
-        prompt: prompt,
-        system: "Você é um especialista em SEO. Responda estritamente com o objeto JSON solicitado."
+    const content = await openrouter.generate(prompt, {
+        systemPrompt: "Você é um especialista em SEO. Responda estritamente com o objeto JSON solicitado.",
+        model: getModel(),
+        jsonMode: true,
     })
 
-    return object
+    const cleaned = content.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim()
+    return KeywordSuggestionSchema.parse(JSON.parse(cleaned))
 }
 
 // ... rest of the file ...
@@ -74,16 +77,12 @@ export interface ContentIdea extends z.infer<typeof ContentIdeaSchema> {}
  * Analyze a topic for content strategy
  */
 export async function analyzeTopic(topic: string): Promise<TopicAnalysis> {
-    const prompt = `Analise o seguinte tópico para estratégia de conteúdo: ${topic}`
-
-    const { object } = await generateObject({
-        model: openrouter(DEFAULT_MODEL),
-        schema: TopicAnalysisSchema,
-        prompt: prompt,
-        system: "Você é um estrategista de conteúdo SEO."
-    })
-
-    return object
+    const content = await openrouter.generate(
+        `Analise o seguinte tópico para estratégia de conteúdo: ${topic}`,
+        { systemPrompt: "Você é um estrategista de conteúdo SEO.", model: getModel(), jsonMode: true }
+    )
+    const cleaned = content.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim()
+    return TopicAnalysisSchema.parse(JSON.parse(cleaned))
 }
 
 /**
@@ -96,13 +95,13 @@ export async function generateContentIdeas(
     const prompt = `Gere ${count} ideias de conteúdo para o portal EDA Show sobre: ${topic}
     Para cada ideia, considere diferentes formatos e ângulos únicos.`
 
-    const { object } = await generateObject({
-        model: openrouter(DEFAULT_MODEL),
-        schema: ContentIdeasResponseSchema,
-        prompt: prompt,
-        system: "Você é um editor criativo."
+    const content = await openrouter.generate(prompt, {
+        systemPrompt: "Você é um editor criativo.",
+        model: getModel(),
+        jsonMode: true,
     })
-
+    const cleaned = content.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim()
+    const object = ContentIdeasResponseSchema.parse(JSON.parse(cleaned))
     return object.ideas
 }
 

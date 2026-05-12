@@ -1,11 +1,10 @@
 /**
- * Content Generator Service (Vercel AI SDK Version)
- * Uses OpenRouter to generate post content, titles, excerpts, and meta tags
+ * Content Generator Service
+ * Uses OpenRouter (via custom client) to generate post content, titles, excerpts, and meta tags
  */
 
-import { generateObject, generateText } from 'ai'
 import { z } from 'zod'
-import { openrouter, DEFAULT_MODEL, PREMIUM_MODEL } from './vercel-ai'
+import { openrouter } from './openrouter'
 import { createAdminClient } from '@/lib/supabase/server'
 import { POST_GENERATION_PROMPT } from './prompts'
 import { ContextAssembler } from './context-engine/assembler'
@@ -13,12 +12,11 @@ import { ContextAssembler } from './context-engine/assembler'
 export interface PostGenerationConfig {
     topic: string
     keywords?: string[]
-    tone?: 'professional' | 'casual' | 'formal' | 'friendly' // Deprecated in favor of personaId
-    personaId?: string // 'eda-raiz' | 'eda-pro'
+    tone?: 'professional' | 'casual' | 'formal' | 'friendly'
+    personaId?: string
     wordCount?: number
     additionalInstructions?: string
     model?: string
-    // Context Flags
     includeBrandVoice?: boolean
     includeSeoRules?: boolean
 }
@@ -40,23 +38,19 @@ interface GenerationResult {
     cost: number
 }
 
-// Schemas
 const GeneratedPostSchema = z.object({
-    title: z.string().describe('Título otimizado para SEO'),
-    excerpt: z.string().describe('Resumo curto para redes sociais (max 160 chars)'),
-    content: z.string().describe('Conteúdo completo em Markdown'),
-    metaDescription: z.string().describe('Meta descrição SEO'),
-    suggestedTags: z.array(z.string()).describe('Lista de 5 tags relevantes'),
-    suggestedCategory: z.string().optional().describe('Categoria sugerida para o post')
+    title: z.string(),
+    excerpt: z.string(),
+    content: z.string(),
+    metaDescription: z.string(),
+    suggestedTags: z.array(z.string()),
+    suggestedCategory: z.string().optional(),
 })
 
 const TitlesSchema = z.object({
-    titles: z.array(z.string())
+    titles: z.array(z.string()),
 })
 
-/**
- * Replace template variables with actual values
- */
 function fillTemplate(template: string, variables: Record<string, string>): string {
     let result = template
     for (const [key, value] of Object.entries(variables)) {
@@ -65,54 +59,52 @@ function fillTemplate(template: string, variables: Record<string, string>): stri
     return result
 }
 
-/**
- * Helper to clean JSON string from Markdown code blocks
- */
 function cleanJsonString(text: string): string {
-    return text.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim();
+    return text.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim()
 }
 
-/**
- * Helper to generate object resiliently using generateText and manual parse if needed
- */
-async function generateResilientObject<T = any>(options: any): Promise<{ object: T, usage: any }> {
+function getModel(model?: string): string {
+    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20'
+}
+
+function generateSlug(title: string): string {
+    return title
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+}
+
+function normalizeObject(obj: any): any {
+    if (obj.body && !obj.content) obj.content = obj.body
+    if (obj.text && !obj.content) obj.content = obj.text
+    if (obj.tags && !obj.suggestedTags) obj.suggestedTags = obj.tags
+    if (obj.category && !obj.suggestedCategory) obj.suggestedCategory = obj.category
+    return obj
+}
+
+async function generateJSONWithSchema<T>(schema: z.ZodType<T>, systemPrompt: string, userPrompt: string, model: string): Promise<{ object: T; usage: any }> {
+    const content = await openrouter.generate(userPrompt, {
+        systemPrompt,
+        model,
+        maxTokens: 8000,
+        temperature: 0.7,
+        jsonMode: true,
+    })
+
     try {
-        // First try standard object generation
-        const result = await generateObject(options);
-        return { object: result.object as T, usage: result.usage };
-    } catch (error: any) {
-        // If JSON parse fails (often due to markdown blocks), try generating text and parsing manually
-        if (error.name === 'AI_JSONParseError' || error.name === 'AI_NoObjectGeneratedError') {
-            console.warn('Standard object generation failed, trying fallback text generation...');
-            
-            const { text, usage } = await generateText({
-                ...options,
-                prompt: options.prompt + "\n\nIMPORTANT: Return ONLY valid JSON. Do not use markdown blocks.",
-            });
-
-            try {
-                const cleaned = cleanJsonString(text);
-                const object = JSON.parse(cleaned);
-                
-                // Normalize common field variations from AI
-                if (object.body && !object.content) object.content = object.body;
-                if (object.text && !object.content) object.content = object.text;
-                if (object.tags && !object.suggestedTags) object.suggestedTags = object.tags;
-                if (object.category && !object.suggestedCategory) object.suggestedCategory = object.category;
-
-                return { object, usage };
-            } catch (parseError) {
-                console.error('Fallback parsing failed:', text);
-                throw error; // Throw original error if fallback also fails
-            }
-        }
-        throw error;
+        const cleaned = cleanJsonString(content)
+        const parsed = JSON.parse(cleaned)
+        const normalized = normalizeObject(parsed)
+        const object = schema.parse(normalized)
+        return { object, usage: { totalTokens: 0 } }
+    } catch (err: any) {
+        console.error('[generateJSONWithSchema] parse error:', content)
+        throw new Error(`Falha ao gerar JSON: ${err?.message}`)
     }
 }
 
-/**
- * Generate a complete blog post
- */
 export async function generatePost(config: PostGenerationConfig): Promise<GenerationResult> {
     const prompt = fillTemplate(POST_GENERATION_PROMPT, {
         topic: config.topic,
@@ -120,33 +112,18 @@ export async function generatePost(config: PostGenerationConfig): Promise<Genera
         instructions: config.additionalInstructions || ''
     })
 
-    const model = config.model || DEFAULT_MODEL
-    
-    // Use Runtime Context Engine
+    const model = getModel(config.model)
+
     const systemPrompt = await ContextAssembler.buildSystemPrompt({
         personaId: config.personaId || 'eda-pro',
-        includeBrandVoice: config.includeBrandVoice ?? true, // Default to true
-        includeSeoRules: config.includeSeoRules ?? true,     // Default to true
+        includeBrandVoice: config.includeBrandVoice ?? true,
+        includeSeoRules: config.includeSeoRules ?? true,
         customInstructions: config.additionalInstructions
-    });
-    
-    // Use resilient generation
-    const { object, usage } = await generateResilientObject<z.infer<typeof GeneratedPostSchema>>({
-        model: openrouter(model),
-        schema: GeneratedPostSchema,
-        prompt: prompt,
-        system: systemPrompt,
-        temperature: 0.7
     })
 
+    const { object, usage } = await generateJSONWithSchema(GeneratedPostSchema, systemPrompt, prompt, model)
 
-    // Generate slug from title
-    const slug = object.title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '')
+    const slug = generateSlug(object.title)
 
     return {
         data: {
@@ -159,84 +136,48 @@ export async function generatePost(config: PostGenerationConfig): Promise<Genera
             suggestedCategory: object.suggestedCategory
         },
         tokensUsed: usage?.totalTokens || 0,
-        model: model,
-        cost: 0 
+        model,
+        cost: 0
     }
 }
 
-/**
- * Generate multiple title options for SEO
- */
-export async function generateTitles(
-    topic: string,
-    keywords: string[],
-    count: number = 5
-): Promise<string[]> {
+export async function generateTitles(topic: string, keywords: string[], count: number = 5): Promise<string[]> {
     const prompt = `Gere ${count} opções de títulos otimizados para SEO para: ${topic}
     Palavras-chave: ${keywords.join(', ')}`
 
-    const { object } = await generateResilientObject<z.infer<typeof TitlesSchema>>({
-        model: openrouter(DEFAULT_MODEL),
-        schema: TitlesSchema,
-        prompt: prompt
-    })
+    const { object } = await generateJSONWithSchema(TitlesSchema, 'Responda estritamente com JSON.', prompt, getModel())
 
     return object.titles
 }
 
-/**
- * Generate an excerpt from content
- */
 export async function generateExcerpt(content: string, maxLength: number = 160): Promise<string> {
-    const { text } = await generateText({
-        model: openrouter(DEFAULT_MODEL),
-        prompt: `Resuma o texto abaixo em até ${maxLength} caracteres:\n\n${content.substring(0, 2000)}`,
-        system: "Responda apenas com o resumo."
-    })
-    return text
+    return openrouter.generate(
+        `Resuma o texto abaixo em até ${maxLength} caracteres:\n\n${content.substring(0, 2000)}`,
+        { systemPrompt: 'Responda apenas com o resumo.', model: getModel(), maxTokens: 300 }
+    )
 }
 
-/**
- * Generate SEO-optimized meta description
- */
-export async function generateMetaDescription(
-    title: string,
-    content: string,
-    keywords: string[]
-): Promise<string> {
-    const { text } = await generateText({
-        model: openrouter(DEFAULT_MODEL),
-        prompt: `Meta description SEO para "${title}". Keywords: ${keywords.join(', ')}.\nConteúdo: ${content.substring(0, 500)}`,
-        system: "Responda apenas com a meta description (max 160 chars)."
-    })
-    return text
+export async function generateMetaDescription(title: string, content: string, keywords: string[]): Promise<string> {
+    return openrouter.generate(
+        `Meta description SEO para "${title}". Keywords: ${keywords.join(', ')}.\nConteúdo: ${content.substring(0, 500)}`,
+        { systemPrompt: 'Responda apenas com a meta description (max 160 chars).', model: getModel(), maxTokens: 200 }
+    )
 }
 
-/**
- * Improve existing content with AI suggestions
- */
-export async function improveContent(
-    content: string,
-    type: 'clarity' | 'seo' | 'engagement' | 'grammar'
-): Promise<string> {
-    const instructions = {
+export async function improveContent(content: string, type: 'clarity' | 'seo' | 'engagement' | 'grammar'): Promise<string> {
+    const instructions: Record<string, string> = {
         clarity: 'Melhore a clareza e fluidez do texto.',
         seo: 'Otimize para SEO com subtítulos e listas.',
         engagement: 'Torne o texto mais envolvente.',
         grammar: 'Corrija erros gramaticais.'
     }
 
-    const { text } = await generateText({
-        model: openrouter(DEFAULT_MODEL),
-        prompt: `${instructions[type]}\n\nTexto: ${content}`
-    })
-    
-    return text
+    return openrouter.generate(
+        `${instructions[type]}\n\nTexto: ${content}`,
+        { model: getModel(), maxTokens: 4000 }
+    )
 }
 
-/**
- * Rewrite content from external source
- */
 export async function rewriteContent(config: {
     sourceContent: string
     tone: string
@@ -253,25 +194,16 @@ export async function rewriteContent(config: {
     - Mantenha os fatos principais
     - Torne o texto original e livre de plágio`
 
-    const { object } = await generateResilientObject<z.infer<typeof GeneratedPostSchema>>({
-        model: openrouter(PREMIUM_MODEL),
-        schema: GeneratedPostSchema,
-        prompt: prompt,
-        system: "Você é um editor experiente. IMPORTANTE: Responda estritamente com o objeto JSON puro."
-    })
+    const { object } = await generateJSONWithSchema(
+        GeneratedPostSchema,
+        'Você é um editor experiente. Responda estritamente com JSON puro.',
+        prompt,
+        getModel()
+    )
 
-    // Generate slug from title
-    const slug = object.title
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '')
+    const slug = generateSlug(object.title)
 
-    return {
-        ...object,
-        slug
-    }
+    return { ...object, slug }
 }
 
 /**
