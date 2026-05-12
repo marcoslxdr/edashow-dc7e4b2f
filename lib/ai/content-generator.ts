@@ -93,15 +93,27 @@ async function generateJSONWithSchema<T>(schema: z.ZodType<T>, systemPrompt: str
         jsonMode: true,
     })
 
+    let parsed: any
+    const cleaned = cleanJsonString(content)
     try {
-        const cleaned = cleanJsonString(content)
-        const parsed = JSON.parse(cleaned)
-        const normalized = normalizeObject(parsed)
+        parsed = JSON.parse(cleaned)
+    } catch {
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[0])
+        } else {
+            console.error('[generateJSONWithSchema] parse error:', content)
+            throw new Error('Falha ao gerar JSON: resposta inválida da IA')
+        }
+    }
+
+    const normalized = normalizeObject(parsed)
+    try {
         const object = schema.parse(normalized)
         return { object, usage: { totalTokens: 0 } }
     } catch (err: any) {
-        console.error('[generateJSONWithSchema] parse error:', content)
-        throw new Error(`Falha ao gerar JSON: ${err?.message}`)
+        console.error('[generateJSONWithSchema] schema validation error:', parsed)
+        throw new Error(`Falha ao validar JSON: ${err?.message}`)
     }
 }
 

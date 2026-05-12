@@ -51,7 +51,8 @@ Responda estritamente com um objeto JSON contendo:
     })
 
     const cleaned = content.replace(/^```json\s*/g, '').replace(/\s*```$/g, '').trim()
-    return KeywordSuggestionSchema.parse(JSON.parse(cleaned))
+    const parsed = JSON.parse(cleaned.match(/\{[\s\S]*\}/)?.[0] || cleaned)
+    return KeywordSuggestionSchema.parse(parsed)
 }
 
 // ... rest of the file ...

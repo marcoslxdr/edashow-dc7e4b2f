@@ -120,7 +120,6 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       category_id: post.categoryId || null,
       columnist_id: null,
       featured_home: false,
-      featured_category: false,
     })
 
     return { id: savedPost?.id, title: post.title }
