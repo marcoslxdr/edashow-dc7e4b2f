@@ -75,6 +75,9 @@ export const MODELS = {
     GPT_4O_MINI: 'openai/gpt-4o-mini',
     GLM_FLASH: 'z-ai/glm-4.7-flash',
 
+    // DeepSeek
+    DEEPSEEK_V3_FLASH: 'deepseek/deepseek-v3',
+
     // Quality
     CLAUDE_SONNET: 'anthropic/claude-3.5-sonnet',
     GPT_4O: 'openai/gpt-4o',
