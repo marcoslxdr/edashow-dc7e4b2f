@@ -76,7 +76,7 @@ export const MODELS = {
     GLM_FLASH: 'z-ai/glm-4.7-flash',
 
     // DeepSeek
-    DEEPSEEK_V3_FLASH: 'deepseek/deepseek-v3',
+    DEEPSEEK_V4_FLASH: 'deepseek/deepseek-v4-flash',
 
     // Quality
     CLAUDE_SONNET: 'anthropic/claude-3.5-sonnet',
