@@ -19,6 +19,11 @@ interface SavedPost {
   title: string
 }
 
+interface FailedPost {
+  keyword: string
+  error: string
+}
+
 async function sendWhatsAppReport(posts: SavedPost[], date: string) {
   const evoUrl = process.env.EVOLUTION_API_URL
   const evoKey = process.env.EVOLUTION_API_KEY
@@ -59,7 +64,7 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
   }
 }
 
-async function generateOnePost(keyword: string): Promise<SavedPost | null> {
+async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<SavedPost | null> {
   try {
     const post = await generateAIPost({
       topic: keyword,
@@ -79,7 +84,9 @@ async function generateOnePost(keyword: string): Promise<SavedPost | null> {
       if (geminiResult.url && !geminiResult.error) {
         coverImageUrl = geminiResult.url
       }
-    } catch { /* fallback to Pexels */ }
+    } catch (e: any) {
+      console.log(`[DAILY] Gemini image failed for "${keyword}": ${e?.message || e}, trying Pexels`)
+    }
 
     if (!coverImageUrl) {
       try {
@@ -95,7 +102,9 @@ async function generateOnePost(keyword: string): Promise<SavedPost | null> {
           )
           if (saved.url) coverImageUrl = saved.url
         }
-      } catch { /* continue without image */ }
+      } catch (e: any) {
+        console.log(`[DAILY] Pexels image failed for "${keyword}": ${e?.message || e}`)
+      }
     }
 
     const savedPost = await savePost({
@@ -115,8 +124,10 @@ async function generateOnePost(keyword: string): Promise<SavedPost | null> {
     })
 
     return { id: savedPost?.id, title: post.title }
-  } catch (error) {
-    console.error(`[DAILY] Failed for keyword "${keyword}":`, error)
+  } catch (error: any) {
+    const msg = error?.message || error?.toString() || 'Erro desconhecido'
+    console.error(`[DAILY] Failed for keyword "${keyword}":`, msg)
+    errors.push({ keyword, error: msg })
     return null
   }
 }
@@ -130,11 +141,12 @@ export async function GET(request: Request) {
   const count = 5
   const keywords = selectRandomKeywords(count)
   const savedPosts: SavedPost[] = []
+  const errors: FailedPost[] = []
 
   console.log(`[DAILY] Starting ${count} posts: ${keywords.join(', ')}`)
 
   for (const keyword of keywords) {
-    const post = await generateOnePost(keyword)
+    const post = await generateOnePost(keyword, errors)
     if (post) {
       savedPosts.push(post)
       console.log(`[DAILY] Generated: ${post.title}`)
@@ -150,7 +162,8 @@ export async function GET(request: Request) {
     total: savedPosts.length,
     keywords,
     posts: savedPosts,
-    whatsapp: !!(process.env.EVOLUTION_API_URL && process.env.WHATSAPP_NUMBER),
+    errors: errors.length > 0 ? errors : undefined,
+    whatsapp: !!(process.env.EVOLUTION_API_URL && (process.env.WHATSAPP_NUMBERS || process.env.WHATSAPP_NUMBER)),
     timestamp: new Date().toISOString(),
   })
 }

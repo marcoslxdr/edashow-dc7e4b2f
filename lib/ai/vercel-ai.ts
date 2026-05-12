@@ -16,8 +16,8 @@ export const openrouter = createOpenAI({
 /**
  * Default model for generations - Gemini 2.5 Flash
  */
-export const DEFAULT_MODEL = 'google/gemini-2.5-flash-preview-05-20';
-export const PREMIUM_MODEL = 'google/gemini-2.5-flash-preview-05-20';
+export const DEFAULT_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20';
+export const PREMIUM_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20';
 
 /**
  * Image generation model - Gemini 2.5 Flash Image (Nano Banana)
