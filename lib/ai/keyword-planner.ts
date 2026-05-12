@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { openrouter } from './openrouter'
 
 function getModel(model?: string): string {
-    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20'
+    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
 }
 
 export interface KeywordSuggestion {

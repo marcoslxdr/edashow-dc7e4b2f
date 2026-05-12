@@ -64,7 +64,7 @@ function cleanJsonString(text: string): string {
 }
 
 function getModel(model?: string): string {
-    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash-preview-05-20'
+    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
 }
 
 function generateSlug(title: string): string {

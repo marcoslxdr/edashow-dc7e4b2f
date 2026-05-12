@@ -60,8 +60,8 @@ export interface OpenRouterModel {
 // Popular models for quick reference
 export const MODELS = {
     // Gemini (default)
-    GEMINI_25_FLASH: 'google/gemini-2.5-flash-preview-05-20',
-    GEMINI_25_FLASH_IMAGE: 'google/gemini-2.5-flash-image-preview',
+    GEMINI_25_FLASH: 'google/gemini-2.5-flash',
+    GEMINI_25_FLASH_IMAGE: 'google/gemini-2.5-flash-image',
     GEMINI_FLASH: 'google/gemini-flash-1.5',
     GEMINI_PRO: 'google/gemini-pro-1.5',
 
