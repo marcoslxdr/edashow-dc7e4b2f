@@ -86,7 +86,7 @@ function normalizeObject(obj: any): any {
 
 async function generateJSONWithSchema<T>(schema: z.ZodType<T>, systemPrompt: string, userPrompt: string, model: string): Promise<{ object: T; usage: any }> {
     const content = await openrouter.generate(userPrompt, {
-        systemPrompt,
+        systemPrompt: systemPrompt + '\nIMPORTANTE: Escapes caracteres especiais corretamente no JSON (quebras de linha como \\n, aspas como \\").',
         model,
         maxTokens: 8000,
         temperature: 0.7,
@@ -97,12 +97,19 @@ async function generateJSONWithSchema<T>(schema: z.ZodType<T>, systemPrompt: str
     const cleaned = cleanJsonString(content)
     try {
         parsed = JSON.parse(cleaned)
-    } catch {
+    } catch (e1) {
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
         if (jsonMatch) {
-            parsed = JSON.parse(jsonMatch[0])
+            let fixed = jsonMatch[0]
+            fixed = fixed.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            fixed = fixed.replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+            try {
+                parsed = JSON.parse(fixed)
+            } catch (e2) {
+                const msg = e2 instanceof Error ? e2.message : 'erro desconhecido'
+                throw new Error(`Falha ao gerar JSON: ${msg}`)
+            }
         } else {
-            console.error('[generateJSONWithSchema] parse error:', content)
             throw new Error('Falha ao gerar JSON: resposta inválida da IA')
         }
     }

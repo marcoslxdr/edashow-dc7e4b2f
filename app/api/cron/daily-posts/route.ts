@@ -113,7 +113,6 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       slug: post.slug,
       excerpt: post.excerpt,
       content: post.content,
-      meta_description: post.metaDescription,
       cover_image_url: coverImageUrl,
       tags: post.suggestedTags,
       status: 'draft',
