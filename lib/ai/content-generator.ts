@@ -40,10 +40,10 @@ interface GenerationResult {
 
 const GeneratedPostSchema = z.object({
     title: z.string(),
-    excerpt: z.string(),
-    content: z.string(),
-    metaDescription: z.string(),
-    suggestedTags: z.array(z.string()),
+    excerpt: z.string().optional(),
+    content: z.string().optional(),
+    metaDescription: z.string().optional(),
+    suggestedTags: z.array(z.string()).optional(),
     suggestedCategory: z.string().optional(),
 })
 
@@ -148,10 +148,10 @@ export async function generatePost(config: PostGenerationConfig): Promise<Genera
         data: {
             title: object.title,
             slug,
-            excerpt: object.excerpt,
-            content: object.content,
-            metaDescription: object.metaDescription,
-            suggestedTags: object.suggestedTags,
+            excerpt: object.excerpt || '',
+            content: object.content || '',
+            metaDescription: object.metaDescription || '',
+            suggestedTags: object.suggestedTags || [],
             suggestedCategory: object.suggestedCategory
         },
         tokensUsed: usage?.totalTokens || 0,

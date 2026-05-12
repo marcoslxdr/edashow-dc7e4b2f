@@ -137,7 +137,6 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
         cover_image_url: coverImageUrl || null,
         tags: post.suggestedTags || [],
         status: 'draft',
-        category_id: post.categoryId || null,
         columnist_id: null,
         featured_home: false,
       }),
