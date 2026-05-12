@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { generateAIPost } from '@/lib/actions/ai-posts'
 import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
-import { savePost } from '@/lib/actions/cms-posts'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
 
 export const maxDuration = 300
@@ -107,19 +106,52 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       }
     }
 
-    const savedPost = await savePost({
-      id: 'new',
-      title: post.title,
-      slug: post.slug,
-      excerpt: post.excerpt,
-      content: post.content,
-      cover_image_url: coverImageUrl,
-      tags: post.suggestedTags,
-      status: 'draft',
-      category_id: post.categoryId || null,
-      columnist_id: null,
-      featured_home: false,
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !serviceKey) {
+      console.error('[DAILY] Supabase not configured')
+      return null
+    }
+
+    const slug = post.slug || post.title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+
+    const saveRes = await fetch(`${supabaseUrl}/rest/v1/posts`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=representation',
+      },
+      body: JSON.stringify({
+        title: post.title,
+        slug,
+        excerpt: post.excerpt,
+        content: post.content,
+        cover_image_url: coverImageUrl || null,
+        tags: post.suggestedTags || [],
+        status: 'draft',
+        category_id: post.categoryId || null,
+        columnist_id: null,
+        featured_home: false,
+      }),
     })
+
+    if (!saveRes.ok) {
+      const errText = await saveRes.text()
+      console.error(`[DAILY] Save failed for "${keyword}":`, errText)
+      errors.push({ keyword, error: `Erro ao salvar: ${errText.substring(0, 200)}` })
+      return null
+    }
+
+    const saved = await saveRes.json()
+    const savedPost = Array.isArray(saved) ? saved[0] : saved
 
     return { id: savedPost?.id, title: post.title }
   } catch (error: any) {
