@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
+import { PublishButton } from './publish-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -58,10 +59,11 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
     return (
         <div className="min-h-screen bg-white">
             <div className="mx-auto max-w-3xl px-4 py-8">
-                <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <div className="mb-6 flex flex-col items-start justify-between gap-4 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center">
                     <p className="text-sm font-medium text-amber-800">
                         Rascunho — este post ainda não foi publicado
                     </p>
+                    <PublishButton postId={post.id} />
                 </div>
                 <article>
                     <header className="mb-8">
