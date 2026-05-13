@@ -302,7 +302,6 @@ export async function runNewsPipeline(
         tags: article.suggestedTags,
         status: 'draft',
         featured_home: false,
-        featured_category: false,
         category_id: null,
         columnist_id: null,
       })

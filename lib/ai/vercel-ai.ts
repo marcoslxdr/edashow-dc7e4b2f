@@ -22,4 +22,4 @@ export const PREMIUM_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || 'google/gem
 /**
  * Image generation model - Gemini 2.5 Flash Image (Nano Banana)
  */
-export const IMAGE_MODEL = 'google/gemini-2.5-flash-image-preview';
+export const IMAGE_MODEL = 'google/gemini-2.5-flash-image';

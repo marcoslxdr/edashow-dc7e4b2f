@@ -65,6 +65,14 @@ export const MODELS = {
     GEMINI_FLASH: 'google/gemini-flash-1.5',
     GEMINI_PRO: 'google/gemini-pro-1.5',
 
+    // MoonshotAI (Kimi)
+    KIMI_K2_6: 'moonshotai/kimi-k2.6',
+    KIMI_K2_5: 'moonshotai/kimi-k2.5',
+
+    // Minimax
+    MINIMAX_M2_7: 'minimax/minimax-m2.7',
+    MINIMAX_M2_5: 'minimax/minimax-m2.5',
+
     // Free models
     FREE_LLAMA: 'meta-llama/llama-3.2-3b-instruct:free',
     FREE_GEMMA: 'google/gemma-2-9b-it:free',
@@ -95,7 +103,7 @@ class OpenRouterClient {
 
     constructor() {
         this.apiKey = process.env.OPENROUTER_API_KEY
-        this.defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || MODELS.GEMINI_25_FLASH
+        this.defaultModel = process.env.OPENROUTER_DEFAULT_MODEL || process.env.OPENROUTER_POST_MODEL || MODELS.GEMINI_25_FLASH
     }
 
     private getHeaders(): HeadersInit {
@@ -111,6 +119,12 @@ class OpenRouterClient {
         }
     }
 
+    /**
+     * Check if model is a reasoning model that needs special handling
+     */
+    private isReasoningModel(model: string): boolean {
+        return model.includes('kimi-k2')
+    }
     /**
      * Check if API is configured
      */
@@ -135,16 +149,80 @@ class OpenRouterClient {
     }
 
     /**
+     * Extract content from OpenRouter response, handling models that return
+     * content in 'reasoning' field instead of 'content' (e.g. moonshotai/kimi-k2.6)
+     */
+    private extractContent(choice: OpenRouterResponse['choices'][0]): string {
+        const message = choice.message
+        if (!message) return ''
+        
+        // Normal case: content is in 'content' field
+        if (message.content) {
+            return message.content
+        }
+        
+        // Handle kimi-k2.6 and similar models that use reasoning field
+        const reasoning = (message as any).reasoning
+        if (reasoning && typeof reasoning === 'string') {
+            return this.extractAnswerFromReasoning(reasoning)
+        }
+        
+        return ''
+    }
+
+    /**
+     * Extract the actual answer from reasoning text
+     * Reasoning models output their thought process; we need the final answer
+     */
+    private extractAnswerFromReasoning(reasoning: string): string {
+        const lines = reasoning.split('\n').map(l => l.trim()).filter(Boolean)
+        
+        // If there's only one line, return it
+        if (lines.length === 1) {
+            return lines[0]
+        }
+        
+        // Find the last line that looks like an actual answer
+        // (not starting with thinking words like "Preciso", "Vou", "Devo", etc.)
+        const thinkingPrefixes = [
+            'preciso', 'vou', 'devo', 'vamos', 'primeiro', 'agora', 'então',
+            'ok', 'hmm', 'bem', 'vamos lá', 'primeiro,', 'vou começar',
+            'o usuário', 'a resposta', 'o título', 'o texto'
+        ]
+        
+        for (let i = lines.length - 1; i >= 0; i--) {
+            const line = lines[i]
+            const lowerLine = line.toLowerCase()
+            
+            // Skip lines that are clearly part of the thought process
+            const isThinking = thinkingPrefixes.some(prefix => lowerLine.startsWith(prefix))
+            if (!isThinking && line.length > 5) {
+                return line
+            }
+        }
+        
+        // Fallback: return the last non-empty line
+        return lines[lines.length - 1] || reasoning
+    }
+
+    /**
      * Send a chat completion request
      */
     async chat(request: OpenRouterRequest): Promise<OpenRouterResponse> {
-        const body: OpenRouterRequest = {
-            model: request.model || this.defaultModel,
+        const model = request.model || this.defaultModel
+        const body: any = {
+            model,
             messages: request.messages,
             max_tokens: request.max_tokens || parseInt(process.env.AI_MAX_TOKENS || '4000'),
             temperature: request.temperature ?? parseFloat(process.env.AI_TEMPERATURE || '0.7'),
             stream: false,
             ...request
+        }
+
+        // Reasoning models (like kimi-k2.6) return thought process in 'reasoning' field
+        // Disable it so content comes in the standard 'content' field
+        if (this.isReasoningModel(model)) {
+            body.include_reasoning = false
         }
 
         const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
@@ -158,7 +236,16 @@ class OpenRouterClient {
             throw new Error(`OpenRouter API error: ${error.message || response.statusText}`)
         }
 
-        return response.json()
+        const data = await response.json() as OpenRouterResponse
+        
+        // Normalize response for reasoning models
+        for (const choice of data.choices || []) {
+            if (!choice.message.content && (choice.message as any).reasoning) {
+                choice.message.content = this.extractAnswerFromReasoning((choice.message as any).reasoning)
+            }
+        }
+        
+        return data
     }
 
     /**
@@ -289,8 +376,8 @@ class OpenRouterClient {
     calculateCost(model: string, promptTokens: number, completionTokens: number): number {
         // Approximate pricing (per 1M tokens)
         const pricing: Record<string, { prompt: number; completion: number }> = {
-            'google/gemini-2.5-flash-preview-05-20': { prompt: 0.15, completion: 0.60 },
-            'google/gemini-2.5-flash-image-preview': { prompt: 0.10, completion: 0.40 },
+            'google/gemini-2.5-flash': { prompt: 0.15, completion: 0.60 },
+            'google/gemini-2.5-flash-image': { prompt: 0.10, completion: 0.40 },
             'google/gemini-flash-1.5': { prompt: 0.075, completion: 0.30 },
             'anthropic/claude-3-haiku': { prompt: 0.25, completion: 1.25 },
             'anthropic/claude-3.5-sonnet': { prompt: 3, completion: 15 },
@@ -298,6 +385,10 @@ class OpenRouterClient {
             'openai/gpt-4o-mini': { prompt: 0.15, completion: 0.60 },
             'openai/gpt-4o': { prompt: 2.50, completion: 10 },
             'z-ai/glm-4.7-flash': { prompt: 0.05, completion: 0.10 },
+            'moonshotai/kimi-k2.6': { prompt: 0.50, completion: 2.00 },
+            'moonshotai/kimi-k2.5': { prompt: 0.30, completion: 1.20 },
+            'minimax/minimax-m2.7': { prompt: 0.20, completion: 0.80 },
+            'minimax/minimax-m2.5': { prompt: 0.10, completion: 0.40 },
         }
 
         const modelPricing = pricing[model] || { prompt: 0, completion: 0 }

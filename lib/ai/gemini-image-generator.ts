@@ -4,10 +4,10 @@
  * Falls back to Pexels stock images if generation fails
  */
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
-const IMAGE_MODEL = 'google/gemini-2.5-flash-image-preview'
+const IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image'
 
 interface GeminiImageResult {
     url: string
@@ -50,15 +50,24 @@ export async function generateCoverImage(prompt: string): Promise<GeminiImageRes
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error(`[ImageGen] API error:`, errorData)
         throw new Error(`Gemini Image API error: ${errorData?.error?.message || response.statusText}`)
     }
 
     const data = await response.json()
+    console.log(`[ImageGen] Response received, model: ${data.model || IMAGE_MODEL}`)
 
     // Extract image from response
     const message = data.choices?.[0]?.message
     if (!message) {
+        console.error(`[ImageGen] No message in response:`, JSON.stringify(data).substring(0, 500))
         throw new Error('Nenhuma resposta do modelo de imagem')
+    }
+
+    // Debug: log message structure
+    console.log(`[ImageGen] Message keys:`, Object.keys(message))
+    if (Array.isArray(message.images)) {
+        console.log(`[ImageGen] Found ${message.images.length} images in message.images`)
     }
 
     // The response may have content as array of parts (multimodal)
@@ -76,18 +85,37 @@ export async function generateCoverImage(prompt: string): Promise<GeminiImageRes
                 if (match) {
                     mimeType = match[1]
                     base64Image = match[2]
+                    console.log(`[ImageGen] Found image in content array, mime: ${mimeType}`)
                     break
                 }
             }
             if (part.type === 'image' && part.data) {
                 base64Image = part.data
                 if (part.mime_type) mimeType = part.mime_type
+                console.log(`[ImageGen] Found image data in content array`)
                 break
             }
         }
     }
 
+    // OpenRouter Gemini image model returns images in message.images array
+    if (!base64Image && Array.isArray(message.images)) {
+        for (const img of message.images) {
+            if (img.type === 'image_url' && img.image_url?.url) {
+                const dataUrl = img.image_url.url
+                const match = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/)
+                if (match) {
+                    mimeType = match[1]
+                    base64Image = match[2]
+                    console.log(`[ImageGen] Found image in message.images, mime: ${mimeType}`)
+                    break
+                }
+            }
+        }
+    }
+
     if (!base64Image) {
+        console.error(`[ImageGen] No image found in response. Message:`, JSON.stringify(message).substring(0, 1000))
         throw new Error('O modelo não gerou uma imagem. Tente um prompt diferente.')
     }
 
@@ -96,7 +124,10 @@ export async function generateCoverImage(prompt: string): Promise<GeminiImageRes
     const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png'
     const filename = `covers/gemini-${Date.now()}.${ext}`
 
-    const supabase = createAdminClient()
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
     const bucket = process.env.SUPABASE_BUCKET || 'media'
 
     const { error: uploadError } = await supabase.storage
@@ -134,6 +165,7 @@ export async function generateImagePrompt(
     }
 
     // Use text model to generate a good image prompt
+    const textModel = process.env.OPENROUTER_POST_MODEL || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
     const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -143,7 +175,7 @@ export async function generateImagePrompt(
             'X-Title': 'EDA Show CMS'
         },
         body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-preview-05-20',
+            model: textModel,
             messages: [
                 {
                     role: 'system',

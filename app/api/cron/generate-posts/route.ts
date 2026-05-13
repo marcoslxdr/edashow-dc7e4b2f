@@ -4,7 +4,7 @@ import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from 
 import { savePost } from '@/lib/actions/cms-posts'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
 
-export const maxDuration = 60
+export const maxDuration = 120
 export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
@@ -23,8 +23,13 @@ export async function POST(request: Request) {
     keyword = selectRandomKeywords(1)[0]
   }
 
+  console.log(`[CRON] Starting post generation for keyword: "${keyword}"`)
+  console.log(`[CRON] Using post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
+  console.log(`[CRON] Using image model: ${process.env.OPENROUTER_IMAGE_MODEL || 'default'}`)
+
   try {
     // 1. Generate post content with AI
+    console.log(`[CRON] Generating post content...`)
     const post = await generateAIPost({
       topic: keyword,
       wordCount: 1000,
@@ -37,11 +42,14 @@ Use exemplos reais do mercado brasileiro.
 O conteúdo deve ser educativo e ajudar consumidores a tomar decisões informadas.
 Pesquise informações atualizadas sobre o tema.`
     })
+    console.log(`[CRON] Post content generated: "${post.title}"`)
 
-    // 2. Generate cover image (Gemini -> Pexels fallback)
+    // 2. Generate cover image (AI -> Pexels fallback)
     let coverImageUrl = ''
+    let imageSource = 'none'
 
-    // Try Gemini first
+    // Try AI image generation first
+    console.log(`[CRON] Generating cover image with AI...`)
     try {
       const geminiResult = await generateAICoverImage({
         title: post.title,
@@ -49,13 +57,18 @@ Pesquise informações atualizadas sobre o tema.`
       })
       if (geminiResult.url && !geminiResult.error) {
         coverImageUrl = geminiResult.url
+        imageSource = 'gemini'
+        console.log(`[CRON] AI image generated successfully: ${coverImageUrl.substring(0, 80)}...`)
+      } else {
+        console.log(`[CRON] AI image generation returned error: ${geminiResult.error}`)
       }
-    } catch {
-      // Gemini failed, will try Pexels
+    } catch (imageError) {
+      console.log(`[CRON] AI image generation failed: ${imageError instanceof Error ? imageError.message : imageError}`)
     }
 
     // Fallback to Pexels
     if (!coverImageUrl) {
+      console.log(`[CRON] Falling back to Pexels...`)
       try {
         const imageResult = await getAICoverSuggestions({
           title: post.title,
@@ -64,6 +77,7 @@ Pesquise informações atualizadas sobre o tema.`
         })
         if (imageResult.images.length > 0) {
           const img = imageResult.images[0]
+          console.log(`[CRON] Found Pexels image: ${img.url.substring(0, 80)}...`)
           // Download and save to Supabase Storage
           const saved = await selectAICoverImage(
             img.url,
@@ -71,29 +85,40 @@ Pesquise informações atualizadas sobre o tema.`
           )
           if (saved.url) {
             coverImageUrl = saved.url
+            imageSource = 'pexels'
+            console.log(`[CRON] Pexels image saved successfully`)
+          } else {
+            console.log(`[CRON] Failed to save Pexels image: ${saved.error}`)
           }
+        } else {
+          console.log(`[CRON] No images found on Pexels`)
         }
-      } catch {
-        // Continue without image
+      } catch (pexelsError) {
+        console.log(`[CRON] Pexels fallback failed: ${pexelsError instanceof Error ? pexelsError.message : pexelsError}`)
       }
     }
 
+    if (!coverImageUrl) {
+      console.log(`[CRON] WARNING: No cover image generated for post`)
+    }
+
     // 3. Save as draft
+    console.log(`[CRON] Saving post to database...`)
     const savedPost = await savePost({
       id: 'new',
       title: post.title,
       slug: post.slug,
       excerpt: post.excerpt,
       content: post.content,
-      meta_description: post.metaDescription,
       cover_image_url: coverImageUrl,
       tags: post.suggestedTags,
       status: 'draft',
       category_id: post.categoryId || null,
       columnist_id: null,
-      featured_home: false,
-      featured_category: false
+      featured_home: false
     })
+
+    console.log(`[CRON] Post saved successfully: ID=${savedPost?.id}, hasImage=${!!coverImageUrl}, source=${imageSource}`)
 
     return NextResponse.json({
       success: true,
@@ -101,6 +126,7 @@ Pesquise informações atualizadas sobre o tema.`
       title: post.title,
       postId: savedPost?.id,
       hasImage: !!coverImageUrl,
+      imageSource,
       timestamp: new Date().toISOString()
     })
   } catch (error) {

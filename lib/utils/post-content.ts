@@ -1,6 +1,8 @@
+import { marked } from 'marked'
+
 /**
  * Normaliza o HTML do conteudo do post
- * Remove TODAS as tags blockquote e converte o conteudo para paragrafos normais
+ * Converte markdown para HTML e remove blockquotes
  */
 export function normalizePostContent(html: string): string {
   if (!html) return ''
@@ -8,8 +10,17 @@ export function normalizePostContent(html: string): string {
   // Remove espacos em branco do inicio e fim
   let content = html.trim()
 
+  // Detecta se o conteudo parece ser markdown (tem sintaxe markdown mas poucas tags HTML)
+  const hasMarkdownSyntax = /(^|\n)(#{1,6}\s|\*\*|__|\*|_|~~|`|^- |\d+\. )/.test(content)
+  const htmlTagCount = (content.match(/<[a-z][\s\S]*?>/gi) || []).length
+  const isMarkdown = hasMarkdownSyntax && htmlTagCount < 10
+
+  // Se for markdown, converte para HTML
+  if (isMarkdown) {
+    content = marked.parse(content, { async: false }) as string
+  }
+
   // Remove TODAS as tags de abertura e fechamento de blockquote
-  // Isso garante que nenhum blockquote seja renderizado como citacao
   content = content.replace(/<\/?blockquote[^>]*>/gi, '')
 
   // Remove espacos extras que possam ter sobrado

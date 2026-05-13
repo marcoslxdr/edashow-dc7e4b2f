@@ -19,8 +19,7 @@ export async function POST(req: Request) {
             status: 'draft',
             category_id: null,
             columnist_id: null,
-            featured_home: false,
-            featured_category: false
+            featured_home: false
         }
 
         const savedPost = await savePost(postData)

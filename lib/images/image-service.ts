@@ -5,7 +5,7 @@
 
 import { pexels, NormalizedImage as PexelsNormalizedImage } from './pexels'
 import { unsplash, NormalizedImage as UnsplashNormalizedImage } from './unsplash'
-import { createClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
 export type ImageProvider = 'pexels' | 'unsplash' | 'all'
 
@@ -153,7 +153,10 @@ export async function downloadAndSaveImage(
     image: NormalizedImage,
     folder: string = 'posts'
 ): Promise<string> {
-    const supabase = await createClient()
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
     // Download image
     const response = await fetch(image.downloadUrl)

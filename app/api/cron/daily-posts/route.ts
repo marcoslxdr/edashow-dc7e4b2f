@@ -64,6 +64,10 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
 }
 
 async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<SavedPost | null> {
+  console.log(`[DAILY] Generating post for keyword: "${keyword}"`)
+  console.log(`[DAILY] Post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
+  console.log(`[DAILY] Image model: ${process.env.OPENROUTER_IMAGE_MODEL || 'default'}`)
+  
   try {
     const post = await generateAIPost({
       topic: keyword,
@@ -72,9 +76,13 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       autoCategorize: true,
       additionalInstructions: ADDITIONAL_INSTRUCTIONS,
     })
+    console.log(`[DAILY] Post generated: "${post.title}"`)
 
     let coverImageUrl = ''
+    let imageSource = 'none'
 
+    // Try AI image generation first
+    console.log(`[DAILY] Generating cover image with AI...`)
     try {
       const geminiResult = await generateAICoverImage({
         title: post.title,
@@ -82,12 +90,18 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       })
       if (geminiResult.url && !geminiResult.error) {
         coverImageUrl = geminiResult.url
+        imageSource = 'gemini'
+        console.log(`[DAILY] AI image generated successfully`)
+      } else {
+        console.log(`[DAILY] AI image generation returned error: ${geminiResult.error}`)
       }
     } catch (e: any) {
       console.log(`[DAILY] Gemini image failed for "${keyword}": ${e?.message || e}, trying Pexels`)
     }
 
+    // Fallback to Pexels
     if (!coverImageUrl) {
+      console.log(`[DAILY] Falling back to Pexels...`)
       try {
         const imageResult = await getAICoverSuggestions({
           title: post.title,
@@ -99,11 +113,23 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
             imageResult.images[0].url,
             imageResult.images[0].source as 'pexels' | 'unsplash' | 'gemini'
           )
-          if (saved.url) coverImageUrl = saved.url
+          if (saved.url) {
+            coverImageUrl = saved.url
+            imageSource = 'pexels'
+            console.log(`[DAILY] Pexels image saved successfully`)
+          } else {
+            console.log(`[DAILY] Failed to save Pexels image: ${saved.error}`)
+          }
+        } else {
+          console.log(`[DAILY] No images found on Pexels`)
         }
       } catch (e: any) {
         console.log(`[DAILY] Pexels image failed for "${keyword}": ${e?.message || e}`)
       }
+    }
+
+    if (!coverImageUrl) {
+      console.log(`[DAILY] WARNING: No cover image generated for post "${post.title}"`)
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -151,6 +177,8 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
 
     const saved = await saveRes.json()
     const savedPost = Array.isArray(saved) ? saved[0] : saved
+
+    console.log(`[DAILY] Post saved: ID=${savedPost?.id}, hasImage=${!!coverImageUrl}, source=${imageSource}`)
 
     return { id: savedPost?.id, title: post.title }
   } catch (error: any) {
