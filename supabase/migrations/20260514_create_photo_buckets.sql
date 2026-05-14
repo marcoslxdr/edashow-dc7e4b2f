@@ -11,8 +11,8 @@ CREATE POLICY "Allow public read public photos"
     TO anon, authenticated
     USING (bucket_id = 'event-photos-public');
 
--- Policy: authenticated (admin via service role bypass) pode tudo nos buckets
-CREATE POLICY "Allow admin full access photo buckets"
+-- Policy: authenticated users can manage objects in both buckets
+CREATE POLICY "Allow authenticated full access photo buckets"
     ON storage.objects FOR ALL
     TO authenticated
     USING (bucket_id IN ('event-photos-original', 'event-photos-public'))
