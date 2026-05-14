@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Plus, MapPin, Calendar } from 'lucide-react'
+import { Plus, MapPin, Calendar, Camera } from 'lucide-react'
+import { getGalleryByEventId } from '@/lib/actions/cms-event-photos'
 import { Button } from '@/components/ui/button'
 import { DataTable } from '@/components/cms/DataTable'
 import { getEvents } from '@/lib/actions/cms-events'
@@ -18,7 +19,17 @@ export default function CMSEventsPage() {
         setLoading(true)
         try {
             const data = await getEvents()
-            setEvents(data || [])
+            const eventsWithGallery = await Promise.all(
+                (data || []).map(async (event: any) => {
+                    try {
+                        const gallery = await getGalleryByEventId(event.id)
+                        return { ...event, has_gallery: !!gallery, photo_count: gallery?.photos?.length || 0 }
+                    } catch {
+                        return { ...event, has_gallery: false, photo_count: 0 }
+                    }
+                })
+            )
+            setEvents(eventsWithGallery)
         } catch (error) {
             console.error('Erro ao buscar eventos:', error)
         }
@@ -40,6 +51,14 @@ export default function CMSEventsPage() {
             render: (item: any) => (
                 <div className="flex flex-col">
                     <span className="font-bold text-gray-900">{item.title}</span>
+                    {item.has_gallery && (
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">
+                                <Camera className="w-2.5 h-2.5" />
+                                {item.photo_count} foto(s)
+                            </span>
+                        </div>
+                    )}
                     <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">
                         <MapPin className="w-2.5 h-2.5" /> {item.location || 'Local não definido'}
                     </div>
