@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS event_photo_galleries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    title TEXT NOT NULL DEFAULT 'Galeria de Fotos',
+    title TEXT NOT NULL,
     description TEXT,
     is_public BOOLEAN DEFAULT true,
     contact_email TEXT,
