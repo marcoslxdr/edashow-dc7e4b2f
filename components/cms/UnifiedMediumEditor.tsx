@@ -48,6 +48,7 @@ import {
 import { AIBubbleMenu } from './ai/AIBubbleMenu'
 import { cn } from '@/lib/utils'
 import { uploadMedia } from '@/lib/actions/cms-media'
+import { marked } from 'marked'
 
 interface UnifiedMediumEditorProps {
     title: string
@@ -66,6 +67,23 @@ interface UnifiedMediumEditorProps {
     status?: string
     wordCount?: number
     readingTime?: number
+}
+
+/**
+ * Detecta se o conteúdo é markdown e converte para HTML
+ */
+function prepareEditorContent(content: string): string {
+  if (!content) return ''
+  
+  // Detecta sintaxe markdown comum
+  const hasMarkdownSyntax = /(^|\n)(#{1,6}\s|\*\*|__|\*|_|~~|`|^- |\d+\. )/.test(content)
+  
+  // Se detectar markdown, converte para HTML
+  if (hasMarkdownSyntax) {
+    return marked.parse(content, { async: false }) as string
+  }
+  
+  return content
 }
 
 export function UnifiedMediumEditor({
@@ -142,7 +160,7 @@ export function UnifiedMediumEditor({
             }),
             CharacterCount,
         ],
-        content,
+        content: prepareEditorContent(content),
         onUpdate: ({ editor }) => {
             onContentChange(editor.getHTML())
         },
@@ -179,6 +197,19 @@ export function UnifiedMediumEditor({
             }
         },
     })
+
+    // Sincroniza o conteúdo do editor quando mudar externamente (ex: carregamento de post)
+    useEffect(() => {
+        if (editor && content) {
+            const currentHtml = editor.getHTML()
+            const newHtml = prepareEditorContent(content)
+            
+            // Só atualiza se o conteúdo for realmente diferente para evitar loops
+            if (currentHtml !== newHtml) {
+                editor.commands.setContent(newHtml, false)
+            }
+        }
+    }, [editor, content])
 
     const handleImageUpload = useCallback(async (file: File) => {
         if (!editor) return
@@ -506,7 +537,7 @@ export function UnifiedMediumEditor({
                             <div
                                 className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-orange-600 prose-strong:text-gray-900"
                                 dangerouslySetInnerHTML={{
-                                    __html: content || '<p class="text-gray-400 italic">Comece a escrever para ver o conteúdo...</p>'
+                                    __html: prepareEditorContent(content) || '<p class="text-gray-400 italic">Comece a escrever para ver o conteúdo...</p>'
                                 }}
                             />
 

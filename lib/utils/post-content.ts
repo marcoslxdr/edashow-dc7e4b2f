@@ -10,13 +10,12 @@ export function normalizePostContent(html: string): string {
   // Remove espacos em branco do inicio e fim
   let content = html.trim()
 
-  // Detecta se o conteudo parece ser markdown (tem sintaxe markdown mas poucas tags HTML)
+  // Detecta se o conteudo parece ser markdown (tem sintaxe markdown clara)
   const hasMarkdownSyntax = /(^|\n)(#{1,6}\s|\*\*|__|\*|_|~~|`|^- |\d+\. )/.test(content)
-  const htmlTagCount = (content.match(/<[a-z][\s\S]*?>/gi) || []).length
-  const isMarkdown = hasMarkdownSyntax && htmlTagCount < 10
-
-  // Se for markdown, converte para HTML
-  if (isMarkdown) {
+  
+  // Se detectar sintaxe markdown, converte para HTML
+  // marked consegue lidar com conteudo misturado (markdown + HTML)
+  if (hasMarkdownSyntax) {
     content = marked.parse(content, { async: false }) as string
   }
 
