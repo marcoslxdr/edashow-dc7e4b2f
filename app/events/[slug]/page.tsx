@@ -1,7 +1,7 @@
 import { getEvents, getEventBySlug, getImageUrl } from '@/lib/supabase/api'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
-import { MapPin, ArrowLeft, ExternalLink } from 'lucide-react'
+import { MapPin, ArrowLeft, ExternalLink, Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -11,6 +11,7 @@ import { EventDateCard } from '@/components/event-date-card'
 import { EventOrganizers } from '@/components/event-organizers'
 import { EventSponsors } from '@/components/event-sponsors'
 import { EventSpeakers } from '@/components/event-speakers'
+import { getGalleryByEventSlug } from '@/lib/actions/cms-event-photos'
 
 // Força renderização dinâmica para evitar erros de serialização durante build
 export const dynamic = 'force-dynamic'
@@ -60,6 +61,8 @@ export default async function EventPage({ params }: EventPageProps) {
   if (!event) {
     notFound()
   }
+
+  const gallery = await getGalleryByEventSlug(params.slug)
 
   const startDate = new Date(event.event_date || event.date)
   const endDate = event.end_date ? new Date(event.end_date) : null
@@ -129,6 +132,17 @@ export default async function EventPage({ params }: EventPageProps) {
           </div>
         </div>
       </div>
+
+      {gallery && (
+        <div className="container mx-auto px-4 mb-6">
+          <Link href={`/events/${params.slug}/gallery`}>
+            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-bold gap-2 shadow-lg">
+              <Camera className="h-5 w-5" />
+              Ver Galeria de Fotos ({gallery.photos?.length || 0})
+            </Button>
+          </Link>
+        </div>
+      )}
 
       <article className="container mx-auto px-4 pb-12 max-w-6xl">
         {/* Card de Data Destacado */}
