@@ -9,6 +9,16 @@ import { join } from 'path'
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
 
+const extractPath = (url: string) => {
+    try {
+        const urlObj = new URL(url)
+        const match = urlObj.pathname.match(/\/public\/[^/]+\/(.+)/)
+        return match ? match[1] : null
+    } catch {
+        return null
+    }
+}
+
 async function getWatermarkBuffer() {
     const logoPath = join(process.cwd(), 'public', 'watermark-logo.png')
     return readFile(logoPath)
@@ -36,7 +46,7 @@ export async function getGalleryByEventSlug(slug: string) {
         .eq('slug', slug)
         .single()
     
-    if (eventError) throw eventError
+    if (eventError && eventError.code !== 'PGRST116') throw eventError
     if (!event) return null
     
     const { data, error } = await supabase
@@ -87,8 +97,7 @@ export async function createOrUpdateGallery(data: {
     }
     
     if (result.error) throw result.error
-    revalidatePath('/cms/events')
-    revalidatePath(`/events/${data.event_id}`)
+    revalidatePath('/events')
     return result.data
 }
 
@@ -99,7 +108,7 @@ export async function uploadEventPhotos(galleryId: string, formData: FormData) {
     if (!files.length) throw new Error('Nenhuma foto enviada')
     
     const watermarkBuffer = await getWatermarkBuffer()
-    const uploadedPhotos = []
+    const uploadedPhotos: any[] = []
     
     for (const file of files) {
         // Validação
@@ -226,18 +235,6 @@ export async function deleteEventPhoto(photoId: string) {
     
     if (fetchError) throw fetchError
     
-    // Extrair paths dos URLs
-    const extractPath = (url: string) => {
-        try {
-            const urlObj = new URL(url)
-            const pathParts = urlObj.pathname.split('/')
-            // Pegar a parte após o bucket name
-            return pathParts.slice(3).join('/')
-        } catch {
-            return null
-        }
-    }
-    
     const originalPath = extractPath(photo.original_url)
     const watermarkedPath = extractPath(photo.watermarked_url)
     const thumbnailPath = extractPath(photo.thumbnail_url)
@@ -263,19 +260,9 @@ export async function deleteEventPhoto(photoId: string) {
 export async function reorderEventPhotos(photoIds: string[]) {
     const supabase = await createAdminClient()
     
-    const updates = photoIds.map((id, index) => ({
-        id,
-        display_order: index
-    }))
-    
-    for (const update of updates) {
-        const { error } = await supabase
-            .from('event_photos')
-            .update({ display_order: update.display_order })
-            .eq('id', update.id)
-        
-        if (error) throw error
-    }
+    await Promise.all(photoIds.map((id, index) =>
+        supabase.from('event_photos').update({ display_order: index }).eq('id', id)
+    ))
     
     revalidatePath('/cms/events')
 }
@@ -293,16 +280,6 @@ export async function deleteGallery(galleryId: string) {
     
     // Deletar arquivos do storage
     for (const photo of photos || []) {
-        const extractPath = (url: string) => {
-            try {
-                const urlObj = new URL(url)
-                const pathParts = urlObj.pathname.split('/')
-                return pathParts.slice(3).join('/')
-            } catch {
-                return null
-            }
-        }
-        
         const originalPath = extractPath(photo.original_url)
         const watermarkedPath = extractPath(photo.watermarked_url)
         const thumbnailPath = extractPath(photo.thumbnail_url)
