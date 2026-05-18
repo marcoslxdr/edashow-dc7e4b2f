@@ -16,6 +16,8 @@ Pesquise informações atualizadas sobre o tema.`
 interface SavedPost {
   id: string
   title: string
+  hasImage: boolean
+  imageSource: string
 }
 
 interface FailedPost {
@@ -31,19 +33,33 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
 
   if (!evoUrl || !evoKey || !numbersRaw) {
     console.log('[DAILY] Evolution API not configured, skipping WhatsApp')
-    return
+    return { sent: 0, skipped: posts.length }
   }
 
   const numbers = numbersRaw.split(',').map(n => n.trim()).filter(Boolean)
-  if (numbers.length === 0) return
+  if (numbers.length === 0) return { sent: 0, skipped: posts.length }
 
-    const lines = posts.map((p, i) => {
+  // SEPARA: posts com imagem vs sem imagem
+  const postsWithImage = posts.filter(p => p.hasImage)
+  const postsWithoutImage = posts.filter(p => !p.hasImage)
+
+  if (postsWithImage.length === 0) {
+    console.log('[DAILY] Nenhum post com imagem — nada será enviado no WhatsApp')
+    return { sent: 0, skipped: postsWithoutImage.length }
+  }
+
+  const lines = postsWithImage.map((p, i) => {
     const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']
     return `${emojis[i]} ${p.title}\n🔗 https://edashow.com.br/preview/${p.id}`
   }).join('\n\n')
 
-  const message = `📰 *${posts.length} Rascunhos Publicados — Planos de Saúde*\n_EDA Show | ${date}_\n\n${lines}\n\n📝 _Posts como rascunho — revisar antes de publicar_`
+  const skippedText = postsWithoutImage.length > 0
+    ? `\n\n⚠️ _${postsWithoutImage.length} post(s) gerado(s) mas NÃO enviado(s) por falta de imagem de capa_`
+    : ''
 
+  const message = `📰 *${postsWithImage.length} Rascunho(s) Publicado(s) — Planos de Saúde*\n_EDA Show | ${date}_\n\n${lines}${skippedText}\n\n📝 _Posts como rascunho — revisar antes de publicar_`
+
+  let totalSent = 0
   for (const number of numbers) {
     try {
       const response = await fetch(`${evoUrl}/message/sendText/${instance}`, {
@@ -56,10 +72,22 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
       })
 
       const result = await response.json()
-      console.log(`[DAILY] WhatsApp sent to ${number}:`, result?.key?.id || 'OK')
+      if (response.ok) {
+        console.log(`[DAILY] WhatsApp sent to ${number}:`, result?.key?.id || 'OK')
+        totalSent++
+      } else {
+        console.error(`[DAILY] WhatsApp failed for ${number}:`, result)
+      }
     } catch (error) {
       console.error(`[DAILY] WhatsApp error for ${number}:`, error)
     }
+  }
+
+  return {
+    sent: totalSent,
+    withImage: postsWithImage.length,
+    withoutImage: postsWithoutImage.length,
+    skipped: postsWithoutImage.length,
   }
 }
 
@@ -67,7 +95,7 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
   console.log(`[DAILY] Generating post for keyword: "${keyword}"`)
   console.log(`[DAILY] Post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
   console.log(`[DAILY] Image model: ${process.env.OPENROUTER_IMAGE_MODEL || 'default'}`)
-  
+
   try {
     const post = await generateAIPost({
       topic: keyword,
@@ -129,7 +157,7 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
     }
 
     if (!coverImageUrl) {
-      console.log(`[DAILY] WARNING: No cover image generated for post "${post.title}"`)
+      console.log(`[DAILY] WARNING: No cover image generated for post "${post.title}" — será salvo mas NÃO enviado no WhatsApp`)
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -180,7 +208,12 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
 
     console.log(`[DAILY] Post saved: ID=${savedPost?.id}, hasImage=${!!coverImageUrl}, source=${imageSource}`)
 
-    return { id: savedPost?.id, title: post.title }
+    return {
+      id: savedPost?.id,
+      title: post.title,
+      hasImage: !!coverImageUrl,
+      imageSource,
+    }
   } catch (error: any) {
     const msg = error?.message || error?.toString() || 'Erro desconhecido'
     console.error(`[DAILY] Failed for keyword "${keyword}":`, msg)
@@ -206,21 +239,20 @@ export async function GET(request: Request) {
     const post = await generateOnePost(keyword, errors)
     if (post) {
       savedPosts.push(post)
-      console.log(`[DAILY] Generated: ${post.title}`)
+      console.log(`[DAILY] Generated: ${post.title} (hasImage=${post.hasImage})`)
     }
   }
 
   const today = new Date().toLocaleDateString('pt-BR')
-
-  await sendWhatsAppReport(savedPosts, today)
+  const whatsappResult = await sendWhatsAppReport(savedPosts, today)
 
   return NextResponse.json({
     success: true,
     total: savedPosts.length,
     keywords,
     posts: savedPosts,
+    whatsapp: whatsappResult,
     errors: errors.length > 0 ? errors : undefined,
-    whatsapp: !!(process.env.EVOLUTION_API_URL && (process.env.WHATSAPP_NUMBERS || process.env.WHATSAPP_NUMBER)),
     timestamp: new Date().toISOString(),
   })
 }

@@ -1,0 +1,2 @@
+-- Opcional: dados iniciais para `supabase db reset` local.
+-- Produção hospedada não usa este arquivo por padrão.

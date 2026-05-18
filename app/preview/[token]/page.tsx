@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
 import { PublishButton } from './publish-button'
+import { normalizePostContent } from '@/lib/utils/post-content'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +55,7 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
         notFound()
     }
 
-    const html = post.content || ''
+    const html = normalizePostContent(post.content || '')
 
     return (
         <div className="min-h-screen bg-white">

@@ -1,8 +1,9 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { getEventPhotoProcessingConfig } from '@/lib/event-photos/config'
+import { renderPublicWebp, renderThumbnailWebp } from '@/lib/event-photos/process-variants'
 import { revalidatePath } from 'next/cache'
-import sharp from 'sharp'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 
@@ -21,11 +22,17 @@ const extractPath = (url: string) => {
 
 async function getWatermarkBuffer() {
     const logoPath = join(process.cwd(), 'public', 'watermark-logo.png')
-    return readFile(logoPath)
+    try {
+        return await readFile(logoPath)
+    } catch {
+        throw new Error(
+            'Arquivo de marca d\'água ausente. Adicione `public/watermark-logo.png` (PNG com transparência).',
+        )
+    }
 }
 
 export async function getGalleryByEventId(eventId: string) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('event_photo_galleries')
         .select('*, photos:event_photos(*)')
@@ -37,7 +44,7 @@ export async function getGalleryByEventId(eventId: string) {
 }
 
 export async function getGalleryByEventSlug(slug: string) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     
     // Buscar evento pelo slug
     const { data: event, error: eventError } = await supabase
@@ -76,7 +83,11 @@ export async function createOrUpdateGallery(data: {
     contact_email?: string
     contact_whatsapp?: string
 }) {
-    const supabase = await createAdminClient()
+    if (!data.event_id || typeof data.event_id !== 'string') {
+        throw new Error('Salve o evento antes de criar a galeria (evento precisa existir no banco).')
+    }
+
+    const supabase = createAdminClient()
     
     const { id, ...galleryData } = data
     
@@ -101,130 +112,114 @@ export async function createOrUpdateGallery(data: {
     return result.data
 }
 
+type UploadedObject = { bucket: 'event-photos-original' | 'event-photos-public'; path: string }
+
+async function rollbackUploaded(supabase: ReturnType<typeof createAdminClient>, uploaded: UploadedObject[]) {
+    for (const { bucket, path } of [...uploaded].reverse()) {
+        await supabase.storage.from(bucket).remove([path])
+    }
+}
+
 export async function uploadEventPhotos(galleryId: string, formData: FormData) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     const files = formData.getAll('photos') as File[]
-    
+
     if (!files.length) throw new Error('Nenhuma foto enviada')
-    
+
+    const processingConfig = getEventPhotoProcessingConfig()
     const watermarkBuffer = await getWatermarkBuffer()
     const uploadedPhotos: any[] = []
-    
+
     for (const file of files) {
-        // Validação
         if (!ALLOWED_TYPES.includes(file.type)) {
             throw new Error(`Tipo não permitido: ${file.name}. Use JPG, PNG ou WEBP.`)
         }
         if (file.size > MAX_FILE_SIZE) {
             throw new Error(`Arquivo muito grande: ${file.name}. Máximo 20MB.`)
         }
-        
+
         const buffer = Buffer.from(await file.arrayBuffer())
         const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
         const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-        
-        // Upload original
-        const { data: originalData, error: originalError } = await supabase
-            .storage
-            .from('event-photos-original')
-            .upload(`${galleryId}/${fileName}.${ext}`, buffer, {
-                contentType: file.type,
-                upsert: false
-            })
-        
-        if (originalError) throw originalError
-        
-        // Processar com sharp
-        const imageMetadata = await sharp(buffer).metadata()
-        const imageWidth = imageMetadata.width || 1600
-        const logoWidth = Math.round(imageWidth * 0.12)
-        
-        // Redimensionar logo proporcionalmente
-        const resizedLogo = await sharp(watermarkBuffer)
-            .resize(logoWidth, null, { withoutEnlargement: true })
-            .toBuffer()
-        
-        // Versão pública com watermark
-        const publicBuffer = await sharp(buffer)
-            .resize(1600, null, { withoutEnlargement: true })
-            .webp({ quality: 80 })
-            .composite([{
-                input: resizedLogo,
-                gravity: 'southeast',
-                blend: 'over',
-                left: 24,
-                top: 24
-            }])
-            .toBuffer()
-        
-        // Thumbnail
-        const thumbnailBuffer = await sharp(buffer)
-            .resize(400, null, { withoutEnlargement: true })
-            .webp({ quality: 70 })
-            .toBuffer()
-        
-        // Upload versão pública
-        const { data: publicData, error: publicError } = await supabase
-            .storage
-            .from('event-photos-public')
-            .upload(`${galleryId}/${fileName}_public.webp`, publicBuffer, {
+
+        let publicBuffer: Buffer
+        let thumbnailBuffer: Buffer
+        try {
+            publicBuffer = await renderPublicWebp(buffer, watermarkBuffer, processingConfig)
+            thumbnailBuffer = await renderThumbnailWebp(buffer, watermarkBuffer, processingConfig)
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            throw new Error(`Falha ao processar ${file.name}: ${msg}`)
+        }
+
+        const originalPath = `${galleryId}/${fileName}.${ext}`
+        const publicPath = `${galleryId}/${fileName}_public.webp`
+        const thumbPath = `${galleryId}/${fileName}_thumb.webp`
+        const uploaded: UploadedObject[] = []
+
+        try {
+            const { error: originalError } = await supabase
+                .storage
+                .from('event-photos-original')
+                .upload(originalPath, buffer, {
+                    contentType: file.type,
+                    upsert: false,
+                })
+
+            if (originalError) throw originalError
+            uploaded.push({ bucket: 'event-photos-original', path: originalPath })
+
+            const { error: publicError } = await supabase.storage.from('event-photos-public').upload(publicPath, publicBuffer, {
                 contentType: 'image/webp',
-                upsert: false
+                upsert: false,
             })
-        
-        if (publicError) throw publicError
-        
-        // Upload thumbnail
-        const { data: thumbData, error: thumbError } = await supabase
-            .storage
-            .from('event-photos-public')
-            .upload(`${galleryId}/${fileName}_thumb.webp`, thumbnailBuffer, {
+
+            if (publicError) throw publicError
+            uploaded.push({ bucket: 'event-photos-public', path: publicPath })
+
+            const { error: thumbError } = await supabase.storage.from('event-photos-public').upload(thumbPath, thumbnailBuffer, {
                 contentType: 'image/webp',
-                upsert: false
+                upsert: false,
             })
-        
-        if (thumbError) throw thumbError
-        
-        // Construir URLs públicas
-        const { data: publicUrl } = supabase
-            .storage
-            .from('event-photos-public')
-            .getPublicUrl(`${galleryId}/${fileName}_public.webp`)
-        
-        const { data: thumbUrl } = supabase
-            .storage
-            .from('event-photos-public')
-            .getPublicUrl(`${galleryId}/${fileName}_thumb.webp`)
-        
-        const { data: originalUrl } = supabase
-            .storage
-            .from('event-photos-original')
-            .getPublicUrl(`${galleryId}/${fileName}.${ext}`)
-        
-        // Inserir no banco
-        const { data: photoRecord, error: photoError } = await supabase
-            .from('event_photos')
-            .insert([{
-                gallery_id: galleryId,
-                original_url: originalUrl.publicUrl,
-                watermarked_url: publicUrl.publicUrl,
-                thumbnail_url: thumbUrl.publicUrl,
-                file_size: file.size,
-                display_order: 0
-            }])
-            .select()
-            .single()
-        
-        if (photoError) throw photoError
-        uploadedPhotos.push(photoRecord)
+
+            if (thumbError) throw thumbError
+            uploaded.push({ bucket: 'event-photos-public', path: thumbPath })
+
+            const { data: publicUrl } = supabase.storage.from('event-photos-public').getPublicUrl(publicPath)
+
+            const { data: thumbUrl } = supabase.storage.from('event-photos-public').getPublicUrl(thumbPath)
+
+            const { data: originalUrl } = supabase.storage.from('event-photos-original').getPublicUrl(originalPath)
+
+            const { data: photoRecord, error: photoError } = await supabase
+                .from('event_photos')
+                .insert([
+                    {
+                        gallery_id: galleryId,
+                        original_url: originalUrl.publicUrl,
+                        watermarked_url: publicUrl.publicUrl,
+                        thumbnail_url: thumbUrl.publicUrl,
+                        file_size: file.size,
+                        display_order: 0,
+                    },
+                ])
+                .select()
+                .single()
+
+            if (photoError) throw photoError
+            uploadedPhotos.push(photoRecord)
+        } catch (e) {
+            await rollbackUploaded(supabase, uploaded)
+            throw e
+        }
     }
-    
+
     revalidatePath('/cms/events')
     return uploadedPhotos
 }
 
 export async function deleteEventPhoto(photoId: string) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     
     // Buscar foto para obter paths
     const { data: photo, error: fetchError } = await supabase
@@ -258,7 +253,7 @@ export async function deleteEventPhoto(photoId: string) {
 }
 
 export async function reorderEventPhotos(photoIds: string[]) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     
     await Promise.all(photoIds.map((id, index) =>
         supabase.from('event_photos').update({ display_order: index }).eq('id', id)
@@ -268,7 +263,7 @@ export async function reorderEventPhotos(photoIds: string[]) {
 }
 
 export async function deleteGallery(galleryId: string) {
-    const supabase = await createAdminClient()
+    const supabase = createAdminClient()
     
     // Buscar todas as fotos
     const { data: photos, error: photosError } = await supabase

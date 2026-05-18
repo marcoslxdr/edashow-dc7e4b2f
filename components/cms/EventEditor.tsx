@@ -96,6 +96,10 @@ export function EventEditor({ event }: EventEditorProps) {
     }, [currentEvent.id])
 
     const handleSaveGallery = async () => {
+        if (!currentEvent.id) {
+            toast.error('Salve o evento (Criar Evento) antes de configurar a galeria.')
+            return
+        }
         try {
             const data = {
                 id: gallery?.id,
@@ -104,10 +108,12 @@ export function EventEditor({ event }: EventEditorProps) {
             }
             const result = await createOrUpdateGallery(data)
             setGallery(result)
+            await fetchGallery()
             toast.success('Galeria salva com sucesso!')
         } catch (error) {
             console.error('Erro ao salvar galeria:', error)
-            toast.error('Erro ao salvar galeria')
+            const message = error instanceof Error ? error.message : 'Erro ao salvar galeria'
+            toast.error(message)
         }
     }
 
@@ -174,6 +180,7 @@ export function EventEditor({ event }: EventEditorProps) {
             {/* Tabs */}
             <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
                 <button
+                    type="button"
                     onClick={() => setActiveTab('details')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                         activeTab === 'details'
@@ -184,6 +191,7 @@ export function EventEditor({ event }: EventEditorProps) {
                     Detalhes do Evento
                 </button>
                 <button
+                    type="button"
                     onClick={() => setActiveTab('gallery')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
                         activeTab === 'gallery'
@@ -298,6 +306,11 @@ export function EventEditor({ event }: EventEditorProps) {
 
             {activeTab === 'gallery' && (
                 <div className="space-y-6">
+                    {!currentEvent.id && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            Use <strong>Criar Evento</strong> acima para salvar o evento primeiro. Depois você pode criar a galeria de fotos.
+                        </div>
+                    )}
                     {galleryLoading ? (
                         <div className="flex items-center justify-center py-12">
                             <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
@@ -360,8 +373,10 @@ export function EventEditor({ event }: EventEditorProps) {
 
                                 <div className="flex items-center gap-3 pt-2">
                                     <Button
+                                        type="button"
                                         onClick={handleSaveGallery}
-                                        className="bg-orange-500 hover:bg-orange-600 text-white"
+                                        disabled={!currentEvent.id}
+                                        className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
                                     >
                                         <Save className="w-4 h-4 mr-2" />
                                         Salvar Galeria

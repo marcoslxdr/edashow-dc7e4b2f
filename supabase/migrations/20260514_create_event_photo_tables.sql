@@ -36,23 +36,32 @@ CREATE INDEX IF NOT EXISTS idx_event_photos_gallery_id ON event_photos(gallery_i
 ALTER TABLE event_photo_galleries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE event_photos ENABLE ROW LEVEL SECURITY;
 
--- Policies para event_photo_galleries
+-- Policies para event_photo_galleries (CMS usa user_roles: admin | editor)
+DROP POLICY IF EXISTS "Allow public read galleries" ON event_photo_galleries;
+DROP POLICY IF EXISTS "Allow admin full access galleries" ON event_photo_galleries;
 CREATE POLICY "Allow public read galleries"
     ON event_photo_galleries FOR SELECT
     TO anon, authenticated
     USING (is_public = true);
 
-CREATE POLICY "Allow admin full access galleries"
+DROP POLICY IF EXISTS "Allow cms full access galleries" ON event_photo_galleries;
+CREATE POLICY "Allow cms full access galleries"
     ON event_photo_galleries FOR ALL
     TO authenticated
     USING (EXISTS (
-        SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin'
+        SELECT 1 FROM user_roles
+        WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role IN ('admin', 'editor')
     ))
     WITH CHECK (EXISTS (
-        SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin'
+        SELECT 1 FROM user_roles
+        WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role IN ('admin', 'editor')
     ));
 
 -- Policies para event_photos
+DROP POLICY IF EXISTS "Allow public read photos" ON event_photos;
+DROP POLICY IF EXISTS "Allow admin full access photos" ON event_photos;
 CREATE POLICY "Allow public read photos"
     ON event_photos FOR SELECT
     TO anon, authenticated
@@ -62,14 +71,19 @@ CREATE POLICY "Allow public read photos"
         AND event_photo_galleries.is_public = true
     ));
 
-CREATE POLICY "Allow admin full access photos"
+DROP POLICY IF EXISTS "Allow cms full access photos" ON event_photos;
+CREATE POLICY "Allow cms full access photos"
     ON event_photos FOR ALL
     TO authenticated
     USING (EXISTS (
-        SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin'
+        SELECT 1 FROM user_roles
+        WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role IN ('admin', 'editor')
     ))
     WITH CHECK (EXISTS (
-        SELECT 1 FROM users WHERE users.id = auth.uid() AND users.role = 'admin'
+        SELECT 1 FROM user_roles
+        WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role IN ('admin', 'editor')
     ));
 
 -- Trigger para updated_at

@@ -6,12 +6,14 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Policy: anon pode ler bucket publico
+DROP POLICY IF EXISTS "Allow public read public photos" ON storage.objects;
 CREATE POLICY "Allow public read public photos"
     ON storage.objects FOR SELECT
     TO anon, authenticated
     USING (bucket_id = 'event-photos-public');
 
 -- Policy: authenticated users can manage objects in both buckets
+DROP POLICY IF EXISTS "Allow authenticated full access photo buckets" ON storage.objects;
 CREATE POLICY "Allow authenticated full access photo buckets"
     ON storage.objects FOR ALL
     TO authenticated

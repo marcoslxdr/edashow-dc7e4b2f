@@ -1,16 +1,20 @@
 /**
- * Script para gerar 5 posts com IA e enviar para WhatsApp
+ * Script para gerar 5 posts com IA, gerar imagem de capa e enviar para WhatsApp
+ * Fluxo completo: IA -> Imagem -> Draft -> Preview Link -> WhatsApp
  *
  * Executa: npx tsx scripts/generate-and-send-5-posts.ts
  *
  * Requer .env.local com:
  * - OPENROUTER_API_KEY
+ * - OPENROUTER_IMAGE_MODEL (opcional, default: google/gemini-2.5-flash-image)
+ * - PEXELS_API_KEY (opcional, fallback de imagem)
  * - NEXT_PUBLIC_SUPABASE_URL
  * - SUPABASE_SERVICE_ROLE_KEY
- * - EVOLUTION_API_URL (opcional, para envio WhatsApp)
- * - EVOLUTION_API_KEY (opcional, para envio WhatsApp)
- * - EVOLUTION_INSTANCE (opcional, para envio WhatsApp)
- * - WHATSAPP_NUMBERS (opcional, números separados por vírgula)
+ * - NEXT_PUBLIC_SERVER_URL (ou https://edashow.com.br)
+ * - EVOLUTION_API_URL
+ * - EVOLUTION_API_KEY
+ * - EVOLUTION_INSTANCE
+ * - WHATSAPP_NUMBERS
  */
 
 import * as dotenv from 'dotenv'
@@ -22,14 +26,18 @@ dotenv.config({ path: path.join(__dirname, '../.env.local') })
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || ''
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
 const OPENROUTER_MODEL = process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
+const IMAGE_MODEL = process.env.OPENROUTER_IMAGE_MODEL || 'google/gemini-2.5-flash-image'
+const PEXELS_API_KEY = process.env.PEXELS_API_KEY || ''
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+const BUCKET = process.env.SUPABASE_BUCKET || 'media'
 
 const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || ''
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || ''
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'edashow'
 const WHATSAPP_NUMBERS = process.env.WHATSAPP_NUMBERS || ''
+const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'https://edashow.com.br'
 
 // 5 temas sobre planos de saúde
 const TOPICS = [
@@ -56,13 +64,14 @@ const TOPICS = [
 ]
 
 interface GeneratedPost {
+  id?: string
   title: string
   slug: string
   content: string
   excerpt: string
   metaDescription: string
   suggestedTags: string[]
-  suggestedCategory?: string
+  coverImageUrl?: string
 }
 
 function generateSlug(title: string): string {
@@ -74,12 +83,17 @@ function generateSlug(title: string): string {
     .replace(/(^-|-$)/g, '')
 }
 
+function sanitizeJSON(raw: string): string {
+  // Remove bad control characters that break JSON parsing
+  return raw.replace(/[\x00-\x1F\x7F]/g, '')
+}
+
 async function generatePostWithAI(topic: string, keywords: string[]): Promise<GeneratedPost> {
-  const systemPrompt = `Você é um redator especialista em saúde e planos de saúde do Brasil. 
+  const systemPrompt = `Você é um redator especialista em saúde e planos de saúde do Brasil.
 Escreva em português do Brasil (PT-BR) com tom profissional, amigável e acessível.
 Use parágrafos curtos, subtítulos (H2, H3) e listas para facilitar a leitura.
 Otimize para SEO com a palavra-chave no título, primeiro parágrafo e subtítulos.
-Responda APENAS em JSON válido. Escape corretamente caracteres especiais.`
+Responda APENAS em JSON válido. NÃO use caracteres de controle no JSON.`
 
   const userPrompt = `Gere um post completo sobre: ${topic}
 
@@ -93,22 +107,15 @@ Requisitos:
 - Meta descrição focada em conversão
 - 5 a 8 tags relevantes
 
-Retorne no formato JSON:
-{
-  "title": "...",
-  "content": "...",
-  "excerpt": "...",
-  "metaDescription": "...",
-  "suggestedTags": ["..."],
-  "suggestedCategory": "..."
-}`
+Retorne APENAS JSON válido SEM caracteres de controle:
+{"title": "...", "content": "<p>...</p>", "excerpt": "...", "metaDescription": "...", "suggestedTags": ["..."]}`
 
   const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000',
+      'HTTP-Referer': SERVER_URL,
       'X-Title': 'EDA Show CMS',
     },
     body: JSON.stringify({
@@ -129,20 +136,21 @@ Retorne no formato JSON:
   }
 
   const data = await response.json()
-  const content = data.choices?.[0]?.message?.content
+  let content = data.choices?.[0]?.message?.content
 
   if (!content) {
     throw new Error('Resposta vazia da OpenRouter API')
   }
 
+  content = sanitizeJSON(content)
+
   let parsed: any
   try {
     parsed = JSON.parse(content)
   } catch (e) {
-    // Tenta extrair JSON da resposta
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0])
+      parsed = JSON.parse(sanitizeJSON(jsonMatch[0]))
     } else {
       throw new Error('Falha ao parsear JSON da resposta')
     }
@@ -158,11 +166,202 @@ Retorne no formato JSON:
     excerpt: parsed.excerpt || parsed.summary || '',
     metaDescription: parsed.metaDescription || parsed.meta_description || '',
     suggestedTags: parsed.suggestedTags || parsed.tags || [],
-    suggestedCategory: parsed.suggestedCategory || parsed.category || 'Saúde',
   }
 }
 
-async function savePostToSupabase(post: GeneratedPost) {
+// ─── IMAGE GENERATION ───
+
+async function generateImagePrompt(title: string, content?: string): Promise<string> {
+  if (!OPENROUTER_API_KEY) return `Professional blog cover image for: ${title}`
+
+  const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': SERVER_URL,
+      'X-Title': 'EDA Show CMS'
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert at creating image generation prompts. Generate a single, detailed prompt in English for creating a professional blog cover image. The image should be clean, modern, and suitable for a healthcare/wellness blog. Return ONLY the prompt text, nothing else.'
+        },
+        {
+          role: 'user',
+          content: `Create an image generation prompt for a blog post titled: "${title}"${content ? `\n\nContent excerpt: ${content.slice(0, 300)}` : ''}`
+        }
+      ],
+      max_tokens: 200,
+      temperature: 0.7
+    })
+  })
+
+  if (!response.ok) {
+    return `Professional blog cover image for: ${title}`
+  }
+
+  const data = await response.json()
+  return data.choices?.[0]?.message?.content?.trim() || `Professional blog cover image for: ${title}`
+}
+
+async function generateGeminiImage(title: string, content?: string): Promise<string | null> {
+  if (!OPENROUTER_API_KEY) return null
+
+  try {
+    const promptText = await generateImagePrompt(title, content)
+    const imagePrompt = `Generate a professional, high-quality blog cover image. ${promptText}. The image should be photorealistic, well-lit, with a clean modern aesthetic suitable for a professional blog.`
+
+    console.log(`   🎨 Gerando imagem com Gemini...`)
+    const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': SERVER_URL,
+        'X-Title': 'EDA Show CMS'
+      },
+      body: JSON.stringify({
+        model: IMAGE_MODEL,
+        messages: [{ role: 'user', content: imagePrompt }],
+        modalities: ['text', 'image'],
+        max_tokens: 4096,
+        temperature: 0.8
+      })
+    })
+
+    if (!response.ok) {
+      console.log(`   ⚠️ Gemini API error: ${response.status}`)
+      return null
+    }
+
+    const data = await response.json()
+    const message = data.choices?.[0]?.message
+    if (!message) return null
+
+    let base64Image: string | null = null
+    let mimeType = 'image/png'
+
+    if (Array.isArray(message.content)) {
+      for (const part of message.content) {
+        if (part.type === 'image_url' && part.image_url?.url) {
+          const match = part.image_url.url.match(/^data:(image\/\w+);base64,(.+)$/)
+          if (match) { mimeType = match[1]; base64Image = match[2]; break }
+        }
+        if (part.type === 'image' && part.data) {
+          base64Image = part.data
+          if (part.mime_type) mimeType = part.mime_type
+          break
+        }
+      }
+    }
+
+    if (!base64Image && Array.isArray(message.images)) {
+      for (const img of message.images) {
+        if (img.type === 'image_url' && img.image_url?.url) {
+          const match = img.image_url.url.match(/^data:(image\/\w+);base64,(.+)$/)
+          if (match) { mimeType = match[1]; base64Image = match[2]; break }
+        }
+      }
+    }
+
+    if (!base64Image) {
+      console.log(`   ⚠️ Gemini não retornou imagem`)
+      return null
+    }
+
+    const buffer = Buffer.from(base64Image, 'base64')
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png'
+    const filename = `covers/gemini-${Date.now()}.${ext}`
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(filename, buffer, { contentType: mimeType, upsert: true })
+
+    if (uploadError) {
+      console.log(`   ⚠️ Erro upload: ${uploadError.message}`)
+      return null
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filename)
+    console.log(`   ✅ Imagem Gemini gerada!`)
+    return urlData.publicUrl
+  } catch (e: any) {
+    console.log(`   ⚠️ Gemini falhou: ${e.message}`)
+    return null
+  }
+}
+
+async function searchPexels(query: string): Promise<string | null> {
+  if (!PEXELS_API_KEY) return null
+  try {
+    console.log(`   🔍 Buscando no Pexels: "${query}"`)
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`,
+      { headers: { 'Authorization': PEXELS_API_KEY } }
+    )
+    if (!response.ok) return null
+
+    const data = await response.json()
+    const photo = data.photos?.[0]
+    if (!photo) return null
+
+    const imageUrl = photo.src.large2x || photo.src.large
+    console.log(`   📥 Baixando imagem Pexels...`)
+
+    const imgResp = await fetch(imageUrl)
+    if (!imgResp.ok) return null
+
+    const blob = await imgResp.blob()
+    const arrayBuffer = await blob.arrayBuffer()
+    const buffer = new Uint8Array(arrayBuffer)
+
+    const extension = imageUrl.match(/\.(jpg|jpeg|png|webp)/i)?.[1] || 'jpg'
+    const filename = `covers/pexels-${Date.now()}-${photo.id}.${extension}`
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(filename, buffer, { contentType: blob.type || 'image/jpeg', upsert: false })
+
+    if (uploadError) {
+      console.log(`   ⚠️ Erro upload Pexels: ${uploadError.message}`)
+      return null
+    }
+
+    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(filename)
+    console.log(`   ✅ Imagem Pexels salva!`)
+    return urlData.publicUrl
+  } catch (e: any) {
+    console.log(`   ⚠️ Pexels falhou: ${e.message}`)
+    return null
+  }
+}
+
+async function getCoverImage(title: string, content?: string): Promise<string | null> {
+  // Try Gemini first
+  let url = await generateGeminiImage(title, content)
+  if (url) return url
+
+  // Fallback to Pexels
+  console.log(`   🔄 Tentando Pexels como fallback...`)
+  const keywords = title.toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .split(/\s+/)
+    .filter(w => w.length > 3)
+    .slice(0, 5)
+    .join(' ')
+
+  url = await searchPexels(`${keywords} healthcare medical`)
+  return url
+}
+
+// ─── SUPABASE ───
+
+async function savePostToSupabase(post: GeneratedPost): Promise<{ id: string } | null> {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.log('   ⚠️  Supabase não configurado - post não salvo no banco')
     return null
@@ -179,11 +378,11 @@ async function savePostToSupabase(post: GeneratedPost) {
       content: post.content,
       excerpt: post.excerpt,
       tags: post.suggestedTags,
-      status: 'published',
+      cover_image_url: post.coverImageUrl || null,
+      status: 'draft',
       featured_home: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      published_at: new Date().toISOString(),
     })
     .select()
     .single()
@@ -196,38 +395,69 @@ async function savePostToSupabase(post: GeneratedPost) {
   return data
 }
 
-async function sendToWhatsApp(message: string, number: string) {
+// ─── WHATSAPP ───
+
+async function sendToWhatsApp(post: GeneratedPost) {
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
-    return { success: false, error: 'Evolution API não configurada' }
+    console.log('   ⚠️  Evolution API não configurada - pulando WhatsApp')
+    return
   }
 
-  try {
-    const response = await fetch(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': EVOLUTION_API_KEY,
-      },
-      body: JSON.stringify({
-        number: number.replace(/\D/g, ''),
-        text: message,
-        delay: 1000,
-      }),
-    })
+  const numbers = WHATSAPP_NUMBERS.split(',').map(n => n.trim()).filter(Boolean)
+  if (numbers.length === 0) {
+    console.log('   ⚠️  Nenhum número de WhatsApp configurado')
+    return
+  }
 
-    if (!response.ok) {
-      const error = await response.text()
-      return { success: false, error }
+  // VALIDAÇÃO: sem imagem = não envia
+  if (!post.coverImageUrl) {
+    console.log(`   ⛔ Post SEM IMAGEM — NÃO será enviado via WhatsApp`)
+    return
+  }
+
+  if (!post.id) {
+    console.log(`   ⛔ Post sem ID — NÃO será enviado via WhatsApp`)
+    return
+  }
+
+  const previewUrl = `${SERVER_URL}/preview/${post.id}`
+  const message = `*${post.title}*
+
+${post.excerpt}
+
+🔗 Preview: ${previewUrl}`
+
+  for (const number of numbers) {
+    try {
+      const response = await fetch(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': EVOLUTION_API_KEY,
+        },
+        body: JSON.stringify({
+          number: number.replace(/\D/g, ''),
+          text: message,
+          delay: 2000,
+        }),
+      })
+
+      if (response.ok) {
+        console.log(`   ✅ WhatsApp enviado para ${number}`)
+      } else {
+        const error = await response.text()
+        console.log(`   ❌ WhatsApp falhou para ${number}: ${error.substring(0, 200)}`)
+      }
+    } catch (error: any) {
+      console.log(`   ❌ Erro WhatsApp: ${error.message}`)
     }
-
-    return { success: true }
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
 
+// ─── MAIN ───
+
 async function main() {
-  console.log('🤖 EDA Show - Gerador de Posts com IA + WhatsApp\n')
+  console.log('🤖 EDA Show - Gerador de Posts com IA + Imagem + WhatsApp\n')
 
   // Validações
   if (!OPENROUTER_API_KEY) {
@@ -236,6 +466,7 @@ async function main() {
   }
 
   console.log(`✅ OpenRouter configurado (modelo: ${OPENROUTER_MODEL})`)
+  console.log(`🎨 Image model: ${IMAGE_MODEL}`)
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.log('⚠️  Supabase não configurado - posts serão gerados mas não salvos no banco')
@@ -243,11 +474,15 @@ async function main() {
     console.log('✅ Supabase configurado')
   }
 
+  if (!PEXELS_API_KEY) {
+    console.log('⚠️  Pexels não configurado - sem fallback de imagem')
+  }
+
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY) {
     console.log('⚠️  Evolution API não configurada - posts não serão enviados para WhatsApp')
-    console.log('   Configure EVOLUTION_API_URL, EVOLUTION_API_KEY e WHATSAPP_NUMBERS no .env.local')
   } else {
     console.log('✅ Evolution API configurada')
+    console.log(`📞 Números: ${WHATSAPP_NUMBERS || 'nenhum'}`)
   }
 
   console.log('')
@@ -257,63 +492,63 @@ async function main() {
   // Gera 5 posts
   for (let i = 0; i < TOPICS.length; i++) {
     const { topic, keywords } = TOPICS[i]
-    console.log(`\n📝 Gerando post ${i + 1}/5: ${topic}`)
+    console.log(`\n📝 [${i + 1}/5] Gerando post: ${topic}`)
 
     try {
+      // 1. Gera conteúdo
       const post = await generatePostWithAI(topic, keywords)
-      generatedPosts.push(post)
-
       console.log(`   ✅ Título: ${post.title}`)
       console.log(`   🏷️  Tags: ${post.suggestedTags.join(', ')}`)
 
-      // Salva no Supabase
+      // 2. Gera imagem de capa
+      console.log(`   🎨 Gerando imagem de capa...`)
+      post.coverImageUrl = await getCoverImage(post.title, post.content)
+
+      // 3. Salva no Supabase como DRAFT
       const saved = await savePostToSupabase(post)
       if (saved) {
-        console.log(`   💾 Salvo no Supabase (ID: ${saved.id})`)
+        post.id = saved.id
+        console.log(`   💾 Salvo como draft no Supabase (ID: ${saved.id})`)
       }
-    } catch (error) {
-      console.error(`   ❌ Erro ao gerar post:`, error instanceof Error ? error.message : error)
+
+      generatedPosts.push(post)
+    } catch (error: any) {
+      console.error(`   ❌ Erro ao gerar post:`, error.message || error)
     }
 
     // Delay entre gerações
     if (i < TOPICS.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 3000))
     }
   }
 
   console.log(`\n✨ ${generatedPosts.length} posts gerados com sucesso!`)
 
-  // Envia para WhatsApp
-  if (generatedPosts.length > 0 && WHATSAPP_NUMBERS) {
-    const numbers = WHATSAPP_NUMBERS.split(',').map(n => n.trim()).filter(Boolean)
+  // 4. Envia para WhatsApp (somente posts com imagem)
+  if (generatedPosts.length > 0 && EVOLUTION_API_URL && EVOLUTION_API_KEY) {
+    console.log(`\n📱 Enviando posts para WhatsApp...`)
+    console.log(`   ⛔ Posts SEM imagem serão IGNORADOS\n`)
 
-    if (numbers.length > 0 && EVOLUTION_API_URL && EVOLUTION_API_KEY) {
-      console.log(`\n📱 Enviando ${generatedPosts.length} posts para ${numbers.length} número(s)...`)
+    for (let i = 0; i < generatedPosts.length; i++) {
+      const post = generatedPosts[i]
+      console.log(`   [${i + 1}] ${post.title}`)
+      await sendToWhatsApp(post)
 
-      for (const number of numbers) {
-        for (let i = 0; i < generatedPosts.length; i++) {
-          const post = generatedPosts[i]
-          const message = `*${post.title}*
-
-${post.excerpt}
-
-🔗 Leia mais em: ${process.env.NEXT_PUBLIC_SERVER_URL || 'https://edashow.com.br'}/blog/${post.slug}`
-
-          console.log(`   📤 Enviando post ${i + 1} para ${number}...`)
-          const result = await sendToWhatsApp(message, number)
-
-          if (result.success) {
-            console.log(`   ✅ Enviado com sucesso!`)
-          } else {
-            console.log(`   ❌ Falha: ${result.error}`)
-          }
-
-          // Delay entre envios
-          await new Promise(resolve => setTimeout(resolve, 1500))
-        }
+      if (i < generatedPosts.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
   }
+
+  // Resumo final
+  const withImage = generatedPosts.filter(p => !!p.coverImageUrl)
+  const withoutImage = generatedPosts.filter(p => !p.coverImageUrl)
+
+  console.log(`\n📊 RESUMO:`)
+  console.log(`   Total gerados: ${generatedPosts.length}`)
+  console.log(`   Com imagem: ${withImage.length}`)
+  console.log(`   Sem imagem: ${withoutImage.length}`)
+  console.log(`   Enviados WhatsApp: ${withImage.length}`)
 
   console.log('\n🎉 Processo concluído!')
 }
