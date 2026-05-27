@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { toActionError } from '@/lib/supabase/action-error'
 import { getEventPhotoProcessingConfig } from '@/lib/event-photos/config'
 import { isValidDriveUrl } from '@/lib/event-videos/parse-url'
 import { renderPublicWebp, renderThumbnailWebp } from '@/lib/event-photos/process-variants'
@@ -40,7 +41,7 @@ export async function getGalleryByEventId(eventId: string) {
         .eq('event_id', eventId)
         .single()
 
-    if (error && error.code !== 'PGRST116') throw error
+    if (error && error.code !== 'PGRST116') throw toActionError(error, 'Erro ao carregar galeria.')
     return data
 }
 
@@ -54,7 +55,7 @@ export async function getGalleryByEventSlug(slug: string) {
         .eq('slug', slug)
         .single()
     
-    if (eventError && eventError.code !== 'PGRST116') throw eventError
+    if (eventError && eventError.code !== 'PGRST116') throw toActionError(eventError, 'Erro ao buscar evento.')
     if (!event) return null
     
     const { data, error } = await supabase
@@ -64,7 +65,7 @@ export async function getGalleryByEventSlug(slug: string) {
         .eq('is_public', true)
         .single()
 
-    if (error && error.code !== 'PGRST116') throw error
+    if (error && error.code !== 'PGRST116') throw toActionError(error, 'Erro ao carregar galeria.')
     if (!data) return null
     
     // Ordenar fotos
@@ -117,7 +118,12 @@ export async function createOrUpdateGallery(data: {
             .single()
     }
     
-    if (result.error) throw result.error
+    if (result.error) {
+        throw toActionError(
+            result.error,
+            'Não foi possível salvar a galeria. Confira se as migrações de eventos foram aplicadas no Supabase.',
+        )
+    }
     revalidatePath('/events')
     return result.data
 }
@@ -142,7 +148,7 @@ export async function attachExistingEventPhotos(galleryId: string, photoIds: str
         .select('original_url, watermarked_url, thumbnail_url, file_size')
         .in('id', photoIds)
 
-    if (fetchError) throw fetchError
+    if (fetchError) throw toActionError(fetchError)
     if (!sources?.length) throw new Error('Nenhuma foto encontrada para copiar.')
 
     const { count } = await supabase
@@ -161,7 +167,7 @@ export async function attachExistingEventPhotos(galleryId: string, photoIds: str
     }))
 
     const { data, error } = await supabase.from('event_photos').insert(rows).select()
-    if (error) throw error
+    if (error) throw toActionError(error)
 
     revalidatePath('/cms/events')
     revalidatePath('/events')
@@ -180,7 +186,7 @@ export async function searchEventGalleries(query: string, excludeEventId?: strin
     if (query.trim()) q = q.ilike('events.title', `%${query.trim()}%`)
 
     const { data, error } = await q
-    if (error) throw error
+    if (error) throw toActionError(error)
     return data ?? []
 }
 
@@ -227,21 +233,21 @@ async function insertProcessedPhotoFromBuffer(
             .from('event-photos-original')
             .upload(originalPath, buffer, { contentType: mimeType, upsert: false })
 
-        if (originalError) throw originalError
+        if (originalError) throw toActionError(originalError, 'Falha ao enviar foto original.')
         uploaded.push({ bucket: 'event-photos-original', path: originalPath })
 
         const { error: publicError } = await supabase.storage
             .from('event-photos-public')
             .upload(publicPath, publicBuffer, { contentType: 'image/webp', upsert: false })
 
-        if (publicError) throw publicError
+        if (publicError) throw toActionError(publicError, 'Falha ao enviar foto pública.')
         uploaded.push({ bucket: 'event-photos-public', path: publicPath })
 
         const { error: thumbError } = await supabase.storage
             .from('event-photos-public')
             .upload(thumbPath, thumbnailBuffer, { contentType: 'image/webp', upsert: false })
 
-        if (thumbError) throw thumbError
+        if (thumbError) throw toActionError(thumbError, 'Falha ao gerar miniatura.')
         uploaded.push({ bucket: 'event-photos-public', path: thumbPath })
 
         const { data: publicUrl } = supabase.storage.from('event-photos-public').getPublicUrl(publicPath)
@@ -265,7 +271,7 @@ async function insertProcessedPhotoFromBuffer(
             .select()
             .single()
 
-        if (photoError) throw photoError
+        if (photoError) throw toActionError(photoError, 'Falha ao registrar foto na galeria.')
         return photoRecord
     } catch (e) {
         await rollbackUploaded(supabase, uploaded)
@@ -282,7 +288,7 @@ export async function attachMediaToEventGallery(galleryId: string, mediaIds: str
         .select('id, url, filename, mime_type, filesize')
         .in('id', mediaIds)
 
-    if (error) throw error
+    if (error) throw toActionError(error)
     if (!mediaRows?.length) throw new Error('Mídia não encontrada.')
 
     const uploaded: any[] = []
@@ -351,7 +357,7 @@ export async function deleteEventPhoto(photoId: string) {
         .eq('id', photoId)
         .single()
     
-    if (fetchError) throw fetchError
+    if (fetchError) throw toActionError(fetchError)
     
     const originalPath = extractPath(photo.original_url)
     const watermarkedPath = extractPath(photo.watermarked_url)
@@ -370,7 +376,7 @@ export async function deleteEventPhoto(photoId: string) {
     
     // Deletar do banco
     const { error } = await supabase.from('event_photos').delete().eq('id', photoId)
-    if (error) throw error
+    if (error) throw toActionError(error)
     
     revalidatePath('/cms/events')
 }
@@ -394,7 +400,7 @@ export async function deleteGallery(galleryId: string) {
         .select('*')
         .eq('gallery_id', galleryId)
     
-    if (photosError) throw photosError
+    if (photosError) throw toActionError(photosError)
     
     // Deletar arquivos do storage
     for (const photo of photos || []) {
@@ -419,6 +425,6 @@ export async function deleteGallery(galleryId: string) {
         .delete()
         .eq('id', galleryId)
     
-    if (error) throw error
+    if (error) throw toActionError(error)
     revalidatePath('/cms/events')
 }

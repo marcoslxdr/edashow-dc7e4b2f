@@ -3,6 +3,7 @@
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
@@ -20,6 +21,9 @@ export function EventGalleryDialog({ event, open, onOpenChange }: EventGalleryDi
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Galeria — {event.title}</DialogTitle>
+                    <DialogDescription>
+                        Envie fotos, use a biblioteca de mídia ou copie de outras galerias.
+                    </DialogDescription>
                 </DialogHeader>
                 <EventGalleryPanel eventId={event.id} />
             </DialogContent>

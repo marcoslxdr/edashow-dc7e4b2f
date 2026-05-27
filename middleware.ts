@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabasePublicKey } from '@/lib/supabase/env-keys'
 
 // Cookie name for remember-me preference
 const REMEMBER_ME_COOKIE = 'cms_remember_me'
@@ -11,7 +12,7 @@ export async function middleware(request: NextRequest) {
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        getSupabasePublicKey(),
         {
             cookies: {
                 getAll() {

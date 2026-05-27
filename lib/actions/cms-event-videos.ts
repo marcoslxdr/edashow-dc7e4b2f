@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { toActionError } from '@/lib/supabase/action-error'
 import { parseEventVideoUrl } from '@/lib/event-videos/parse-url'
 import { revalidatePath } from 'next/cache'
 
@@ -21,7 +22,7 @@ export async function getEventVideos(eventId: string) {
         .eq('event_id', eventId)
         .order('display_order', { ascending: true })
 
-    if (error) throw error
+    if (error) throw toActionError(error, 'Erro ao carregar vídeos do evento.')
     return data ?? []
 }
 
@@ -92,7 +93,7 @@ export async function addEventVideo(data: {
                 'Tabela event_videos ausente. Aplique a migration 20260526_event_gallery_drive_and_videos.sql.',
             )
         }
-        throw new Error(formatSupabaseError('Não foi possível salvar o vídeo', error))
+        throw toActionError(error, formatSupabaseError('Não foi possível salvar o vídeo', error))
     }
 
     revalidatePath('/cms/events')
@@ -112,10 +113,10 @@ export async function deleteEventVideo(videoId: string) {
         .eq('id', videoId)
         .single()
 
-    if (fetchError) throw new Error(formatSupabaseError('Vídeo não encontrado', fetchError))
+    if (fetchError) throw toActionError(fetchError, formatSupabaseError('Vídeo não encontrado', fetchError))
 
     const { error } = await supabase.from('event_videos').delete().eq('id', videoId)
-    if (error) throw new Error(formatSupabaseError('Não foi possível remover o vídeo', error))
+    if (error) throw toActionError(error, formatSupabaseError('Não foi possível remover o vídeo', error))
 
     if (video?.event_id) {
         const { data: event } = await supabase
