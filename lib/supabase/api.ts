@@ -195,6 +195,37 @@ export async function getCategoryBySlug(slug: string) {
     return data
 }
 
+export async function getPostsByEventSlug(slug: string, limit = 12) {
+    const supabase = getPublicSupabaseClient()
+
+    const { data: event, error: eventError } = await supabase
+        .from('events')
+        .select('id')
+        .eq('slug', slug)
+        .single()
+
+    if (eventError?.code === 'PGRST116') return []
+    if (eventError) {
+        console.error(`Error fetching event ${slug}:`, eventError)
+        return []
+    }
+    if (!event) return []
+
+    const { data, error } = await supabase
+        .from('posts')
+        .select('id, title, slug, excerpt, cover_image_url, published_at')
+        .eq('event_id', event.id)
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .limit(limit)
+
+    if (error) {
+        console.error('Error fetching event coverage posts:', error)
+        return []
+    }
+    return data ?? []
+}
+
 export function getImageUrl(media: any, size: 'card' | 'hero' | 'full' = 'full') {
     if (!media) return '/placeholder.jpg'
     if (typeof media === 'string') return media

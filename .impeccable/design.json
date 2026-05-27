@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-27T00:00:00.000Z",
+  "title": "Design System: EDA Show",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Signal Orange",
+        "canonical": "oklch(68% 0.19 45)",
+        "tonalRamp": ["#4A2800", "#7A4200", "#A85500", "#D46A00", "#FF6F00", "#FF8C33", "#FFB366", "#FFD699", "#FFEBCC", "#FFF7ED"]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(22% 0.01 50)",
+        "tonalRamp": ["#0D0D0D", "#1A1A1A", "#333333", "#4D4D4D", "#666666", "#808080", "#999999", "#B3B3B3", "#CCCCCC", "#E5E5E5"]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": ["#E5E5E5", "#EBEBEB", "#F0F0F0", "#F5F5F5", "#FAFAFA", "#FCFCFC", "#FDFDFD", "#FEFEFE", "#FFFFFF", "#FFFFFF"]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(90% 0.005 50)",
+        "tonalRamp": ["#737373", "#8C8C8C", "#A3A3A3", "#B8B8B8", "#CCCCCC", "#D9D9D9", "#E0E0E0", "#E5E5E5", "#EBEBEB", "#F2F2F2"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero de evento e títulos de destaque no site público." },
+      "body": { "displayName": "Body", "purpose": "Texto corrido, descrições CMS, prose de artigos." },
+      "label": { "displayName": "Label", "purpose": "Cabeçalhos de tabela, badges de status, metadados." }
+    },
+    "shadows": [
+      { "name": "lift", "value": "0 1px 3px rgba(26, 26, 26, 0.08)", "purpose": "Botões default e controles elevados levemente." },
+      { "name": "overlay", "value": "0 10px 40px rgba(26, 26, 26, 0.12)", "purpose": "Dialogs de anexo rápido (galeria, vídeos, posts)." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Hover, focus, transição de step no editor de eventos (~200ms)." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal: salvar evento, enviar fotos, inscrever-se.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\">Salvar evento</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #FF6F00; color: #fff; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-primary:hover { background: #E66300; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.45); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Ações secundárias: Drive download, cancelar.",
+      "html": "<button type=\"button\" class=\"ds-btn-outline\">Baixar no Drive</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #fff; color: #1a1a1a; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 500; padding: 8px 16px; border: 1px solid #e5e5e5; border-radius: 8px; cursor: pointer; transition: background 0.2s cubic-bezier(0.25, 1, 0.5, 1); } .ds-btn-outline:hover { background: #fafafa; border-color: #d4d4d4; } .ds-btn-outline:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.35); }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Campos do EventEditor e dialogs CMS.",
+      "html": "<input type=\"text\" class=\"ds-input\" placeholder=\"Nome do evento\" />",
+      "css": ".ds-input { width: 100%; box-sizing: border-box; background: #fff; color: #1a1a1a; font-family: Inter, system-ui, sans-serif; font-size: 14px; padding: 8px 12px; border: 1px solid #e5e5e5; border-radius: 8px; transition: border-color 0.2s, box-shadow 0.2s; } .ds-input::placeholder { color: #64748b; } .ds-input:focus { outline: none; border-color: #FF6F00; box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.2); }"
+    },
+    {
+      "name": "CMS Sidebar Item Active",
+      "kind": "nav",
+      "description": "Item de navegação ativo na sidebar do CMS.",
+      "html": "<a href=\"#\" class=\"ds-nav-item-active\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"18\" rx=\"2\"/></svg> Eventos</a>",
+      "css": ".ds-nav-item-active { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; background: #fafafa; color: #FF6F00; font-family: Inter, system-ui, sans-serif; font-size: 14px; font-weight: 600; text-decoration: none; } .ds-nav-item-active svg { flex-shrink: 0; }"
+    },
+    {
+      "name": "Photo Drop Zone",
+      "kind": "custom",
+      "description": "Área de upload da galeria de eventos.",
+      "html": "<div class=\"ds-dropzone\"><p class=\"ds-dropzone-text\">Arraste fotos ou clique para selecionar</p></div>",
+      "css": ".ds-dropzone { border: 2px dashed #e5e5e5; border-radius: 12px; padding: 32px; text-align: center; background: #fafafa; transition: border-color 0.2s, background 0.2s; cursor: pointer; } .ds-dropzone:hover, .ds-dropzone.ds-dragover { border-color: #FF6F00; background: #FFF7ED; } .ds-dropzone-text { margin: 0; font-family: Inter, system-ui, sans-serif; font-size: 14px; color: #64748b; }"
+    },
+    {
+      "name": "Event Card Panel",
+      "kind": "card",
+      "description": "Painel branco do editor CMS.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-panel-title\">Detalhes do evento</h2><p class=\"ds-panel-body\">Conteúdo do formulário.</p></section>",
+      "css": ".ds-panel { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 24px; } .ds-panel-title { margin: 0 0 16px; font-family: Inter, system-ui, sans-serif; font-size: 18px; font-weight: 700; color: #1a1a1a; } .ds-panel-body { margin: 0; font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.6; color: #64748b; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Editorial Workshop",
+    "overview": "Sistema visual de veículo especializado em saúde suplementar: fundo claro, tipografia Inter única, laranja como único acento saturado. Densidade confortável no CMS; páginas públicas com hierarquia editorial forte.",
+    "keyCharacteristics": [
+      "Tema claro por padrão",
+      "Restrained: neutros quentes + laranja ≤10% em telas de produto",
+      "shadcn/ui + bordas 1px, radius ~10px",
+      "Motion 150–200ms ease-out para estado",
+      "Copy PT-BR curta"
+    ],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "Laranja só em primário, step ativo, focus e um CTA hero por viewport.", "section": "colors" },
+      { "name": "The Single Voice Rule", "body": "Inter em todo o sistema; hierarquia por escala e peso.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Sombras só em hover, dialog ou flutuante.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar tokens primary, background, foreground, border do globals.css",
+      "Do manter CMS previsível com DataTable, Dialog, toast Sonner",
+      "Do limitar prose pública a ~70ch",
+      "Do usar empty states com próximo passo"
+    ],
+    "donts": [
+      "Don't usar dashboard SaaS genérico ou dark roxo",
+      "Don't usar gradient text, glassmorphism decorativo, neon",
+      "Don't usar healthcare cliché teal dominante",
+      "Don't usar hero-metric template ou side-stripe borders",
+      "Don't esconder galeria/vídeos/posts em rotas sem link na página principal"
+    ]
+  }
+}

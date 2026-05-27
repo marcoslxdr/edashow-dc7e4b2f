@@ -43,6 +43,9 @@ export async function savePost(data: any) {
     if (normalizedData.columnist_id === '' || normalizedData.columnist_id === null) {
         normalizedData.columnist_id = null
     }
+    if (normalizedData.event_id === '' || normalizedData.event_id === null) {
+        normalizedData.event_id = null
+    }
 
     // Ensure tags is an array
     if (normalizedData.tags && !Array.isArray(normalizedData.tags)) {
@@ -149,6 +152,9 @@ export async function autoSavePost(data: any) {
     }
     if (normalizedData.columnist_id === '' || normalizedData.columnist_id === null) {
         normalizedData.columnist_id = null
+    }
+    if (normalizedData.event_id === '' || normalizedData.event_id === null) {
+        normalizedData.event_id = null
     }
 
     // Ensure tags is an array

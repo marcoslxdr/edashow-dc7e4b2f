@@ -1,19 +1,21 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Trash2, Calendar, MapPin, Loader2, Link as LinkIcon, Save, ArrowLeft, Camera, Image as ImageIcon, Youtube, Download } from 'lucide-react'
+import { Trash2, Calendar, MapPin, Loader2, Link as LinkIcon, Save, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useRouter } from 'next/navigation'
 import { saveEvent, deleteEvent } from '@/lib/actions/cms-events'
-import { getGalleryByEventId, createOrUpdateGallery, deleteGallery } from '@/lib/actions/cms-event-photos'
+import { getGalleryByEventId } from '@/lib/actions/cms-event-photos'
 import { CoverImageUpload } from './CoverImageUpload'
-import { GalleryUploader } from './GalleryUploader'
-import { GalleryPhotoGrid } from './GalleryPhotoGrid'
-import { EventVideosEditor } from './EventVideosEditor'
+import { EventStepper, type EventEditorStep } from './EventStepper'
+import { EventGalleryPanel } from './EventGalleryPanel'
+import { EventVideosPanel } from './EventVideosPanel'
+import { EventPostsPanel } from './EventPostsPanel'
 import { getEventVideos } from '@/lib/actions/cms-event-videos'
+import { getEventPosts } from '@/lib/actions/cms-event-posts'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -62,19 +64,12 @@ function buildInitialEvent(evt?: any) {
 export function EventEditor({ event }: EventEditorProps) {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
-    const [activeTab, setActiveTab] = useState<'details' | 'gallery' | 'videos'>('details')
+    const [activeStep, setActiveStep] = useState<EventEditorStep>('details')
     const [gallery, setGallery] = useState<any>(null)
     const [galleryLoading, setGalleryLoading] = useState(false)
-    const [galleryForm, setGalleryForm] = useState({
-        title: 'Galeria de Fotos',
-        description: '',
-        is_public: true,
-        contact_email: '',
-        contact_whatsapp: '',
-        drive_download_url: '',
-    })
     const [eventVideos, setEventVideos] = useState<any[]>([])
     const [videosLoading, setVideosLoading] = useState(false)
+    const [postCount, setPostCount] = useState(0)
     const [currentEvent, setCurrentEvent] = useState<any>(() => buildInitialEvent(event))
 
     const handleSave = async (e?: React.FormEvent) => {
@@ -83,10 +78,11 @@ export function EventEditor({ event }: EventEditorProps) {
         try {
             const saved = await saveEvent(currentEvent)
             setCurrentEvent((prev: any) => ({ ...prev, ...saved }))
-            toast.success('Evento salvo com sucesso!')
             if (!currentEvent.id && saved?.id) {
+                toast.success('Evento criado. Você pode anexar galeria, vídeos e posts quando quiser.')
                 router.replace(`/cms/events/${saved.id}`)
             } else {
+                toast.success('Evento salvo com sucesso!')
                 router.refresh()
             }
         } catch (error) {
@@ -114,21 +110,21 @@ export function EventEditor({ event }: EventEditorProps) {
         setGalleryLoading(true)
         try {
             const data = await getGalleryByEventId(currentEvent.id)
-            if (data) {
-                setGallery(data)
-                setGalleryForm({
-                    title: data.title || 'Galeria de Fotos',
-                    description: data.description || '',
-                    is_public: data.is_public !== false,
-                    contact_email: data.contact_email || '',
-                    contact_whatsapp: data.contact_whatsapp || '',
-                    drive_download_url: data.drive_download_url || '',
-                })
-            }
+            setGallery(data ?? null)
         } catch (error) {
             console.error('Erro ao buscar galeria:', error)
         }
         setGalleryLoading(false)
+    }
+
+    const fetchPostCount = async () => {
+        if (!currentEvent.id) return
+        try {
+            const posts = await getEventPosts(currentEvent.id)
+            setPostCount(posts.length)
+        } catch {
+            setPostCount(0)
+        }
     }
 
     const fetchVideos = async () => {
@@ -147,52 +143,9 @@ export function EventEditor({ event }: EventEditorProps) {
         if (currentEvent.id) {
             fetchGallery()
             fetchVideos()
+            fetchPostCount()
         }
     }, [currentEvent.id])
-
-    const handleSaveGallery = async () => {
-        if (!currentEvent.id) {
-            toast.error('Salve o evento (Criar Evento) antes de configurar a galeria.')
-            return
-        }
-        try {
-            const data = {
-                id: gallery?.id,
-                event_id: currentEvent.id,
-                ...galleryForm
-            }
-            const result = await createOrUpdateGallery(data)
-            setGallery(result)
-            await fetchGallery()
-            toast.success('Galeria salva com sucesso!')
-        } catch (error) {
-            console.error('Erro ao salvar galeria:', error)
-            const message = error instanceof Error ? error.message : 'Erro ao salvar galeria'
-            toast.error(message)
-        }
-    }
-
-    const handleDeleteGallery = async () => {
-        if (!gallery?.id) return
-        if (!confirm('Tem certeza que deseja excluir toda a galeria? Todas as fotos serão removidas.')) return
-        
-        try {
-            await deleteGallery(gallery.id)
-            setGallery(null)
-            setGalleryForm({
-                title: 'Galeria de Fotos',
-                description: '',
-                is_public: true,
-                contact_email: '',
-                contact_whatsapp: '',
-                drive_download_url: '',
-            })
-            toast.success('Galeria excluída!')
-        } catch (error) {
-            console.error('Erro ao excluir galeria:', error)
-            toast.error('Erro ao excluir galeria')
-        }
-    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -234,52 +187,16 @@ export function EventEditor({ event }: EventEditorProps) {
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
-                <button
-                    type="button"
-                    onClick={() => setActiveTab('details')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                        activeTab === 'details'
-                            ? 'border-orange-500 text-orange-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    Detalhes do Evento
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab('gallery')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                        activeTab === 'gallery'
-                            ? 'border-orange-500 text-orange-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    <Camera className="w-4 h-4" />
-                    Galeria de Fotos
-                    {gallery && <span className="bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full">{gallery.photos?.length || 0}</span>}
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setActiveTab('videos')}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
-                        activeTab === 'videos'
-                            ? 'border-orange-500 text-orange-600'
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                    }`}
-                >
-                    <Youtube className="w-4 h-4" />
-                    Vídeos
-                    {eventVideos.length > 0 && (
-                        <span className="bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full">
-                            {eventVideos.length}
-                        </span>
-                    )}
-                </button>
-            </div>
+            <EventStepper
+                activeStep={activeStep}
+                onStepChange={setActiveStep}
+                eventId={currentEvent.id}
+                photoCount={gallery?.photos?.length || 0}
+                videoCount={eventVideos.length}
+                postCount={postCount}
+            />
 
-            {activeTab === 'details' && (
+            {activeStep === 'details' && (
                 <form onSubmit={handleSave}>
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Content */}
@@ -431,167 +348,31 @@ export function EventEditor({ event }: EventEditorProps) {
                 </form>
             )}
 
-            {activeTab === 'gallery' && (
-                <div className="space-y-6">
-                    {!currentEvent.id && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                            Use <strong>Criar Evento</strong> acima para salvar o evento primeiro. Depois você pode criar a galeria de fotos.
-                        </div>
-                    )}
-                    {galleryLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
-                        </div>
-                    ) : (
-                        <>
-                            {/* Gallery Settings */}
-                            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    <Camera className="w-5 h-5 text-orange-500" />
-                                    Configurações da Galeria
-                                </h3>
-                                <p className="text-sm text-gray-500">
-                                    As fotos enviadas recebem marca d&apos;água automaticamente na versão pública.
-                                </p>
-
-                                <div className="space-y-2">
-                                    <Label>Título da Galeria</Label>
-                                    <Input
-                                        value={galleryForm.title}
-                                        onChange={(e) => setGalleryForm({ ...galleryForm, title: e.target.value })}
-                                        placeholder="Galeria de Fotos"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Descrição</Label>
-                                    <textarea
-                                        value={galleryForm.description}
-                                        onChange={(e) => setGalleryForm({ ...galleryForm, description: e.target.value })}
-                                        className="w-full bg-white border border-gray-200 rounded-md p-3 text-gray-700 text-sm min-h-[80px] outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-y"
-                                        placeholder="Descrição opcional da galeria..."
-                                    />
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                    <Label>Galeria Pública</Label>
-                                    <Switch
-                                        checked={galleryForm.is_public}
-                                        onCheckedChange={(checked) => setGalleryForm({ ...galleryForm, is_public: checked })}
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="flex items-center gap-2">
-                                        <Download className="w-4 h-4 text-gray-400" />
-                                        Link do Google Drive (download das fotos)
-                                    </Label>
-                                    <Input
-                                        value={galleryForm.drive_download_url}
-                                        onChange={(e) =>
-                                            setGalleryForm({ ...galleryForm, drive_download_url: e.target.value })
-                                        }
-                                        placeholder="https://drive.google.com/drive/folders/..."
-                                    />
-                                    <p className="text-xs text-gray-500">
-                                        Link compartilhado do Drive para o visitante baixar as fotos em alta qualidade.
-                                    </p>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Email de Contato</Label>
-                                        <Input
-                                            value={galleryForm.contact_email}
-                                            onChange={(e) => setGalleryForm({ ...galleryForm, contact_email: e.target.value })}
-                                            placeholder="contato@exemplo.com"
-                                            type="email"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>WhatsApp de Contato</Label>
-                                        <Input
-                                            value={galleryForm.contact_whatsapp}
-                                            onChange={(e) => setGalleryForm({ ...galleryForm, contact_whatsapp: e.target.value })}
-                                            placeholder="(11) 99999-9999"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-3 pt-2">
-                                    <Button
-                                        type="button"
-                                        onClick={handleSaveGallery}
-                                        disabled={!currentEvent.id}
-                                        className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
-                                    >
-                                        <Save className="w-4 h-4 mr-2" />
-                                        Salvar Galeria
-                                    </Button>
-                                    {gallery?.id && (
-                                        <Button
-                                            variant="destructive"
-                                            onClick={handleDeleteGallery}
-                                            className="bg-white text-red-600 border border-red-200 hover:bg-red-50"
-                                        >
-                                            <Trash2 className="w-4 h-4 mr-2" />
-                                            Excluir Galeria
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Photo Upload */}
-                            {gallery?.id && (
-                                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                        <ImageIcon className="w-5 h-5 text-orange-500" />
-                                        Enviar Fotos
-                                    </h3>
-                                    <GalleryUploader
-                                        galleryId={gallery.id}
-                                        onUploadComplete={fetchGallery}
-                                    />
-                                </div>
-                            )}
-
-                            {/* Photo Grid */}
-                            {gallery?.photos?.length > 0 && (
-                                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-                                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                        <ImageIcon className="w-5 h-5 text-orange-500" />
-                                        Fotos ({gallery.photos.length})
-                                    </h3>
-                                    <GalleryPhotoGrid
-                                        photos={gallery.photos}
-                                        onUpdate={fetchGallery}
-                                    />
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
+            {activeStep === 'gallery' && currentEvent.id && (
+                <EventGalleryPanel
+                    eventId={currentEvent.id}
+                    onGalleryChange={() => {
+                        fetchGallery()
+                    }}
+                />
             )}
 
-            {activeTab === 'videos' && (
-                <div className="space-y-6">
-                    {!currentEvent.id && (
-                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                            Use <strong>Criar Evento</strong> acima para salvar o evento antes de anexar vídeos.
-                        </div>
-                    )}
-                    {videosLoading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
-                        </div>
-                    ) : currentEvent.id ? (
-                        <EventVideosEditor
-                            eventId={currentEvent.id}
-                            videos={eventVideos}
-                            onChange={fetchVideos}
-                        />
-                    ) : null}
-                </div>
+            {activeStep === 'videos' && currentEvent.id && (
+                videosLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                ) : (
+                    <EventVideosPanel
+                        eventId={currentEvent.id}
+                        videos={eventVideos}
+                        onChange={fetchVideos}
+                    />
+                )
+            )}
+
+            {activeStep === 'posts' && currentEvent.id && (
+                <EventPostsPanel eventId={currentEvent.id} />
             )}
         </div>
     )

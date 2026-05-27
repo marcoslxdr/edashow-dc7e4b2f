@@ -67,7 +67,8 @@ export function PostEditor({ post, categories, columnists }: PostEditorProps) {
         published_at: post?.published_at ? new Date(post.published_at).toISOString().split('T')[0] : '',
         featured_home: post?.featured_home || false,
         source_url: post?.source_url || '',
-        tags: post?.tags || []
+        tags: post?.tags || [],
+        event_id: post?.event_id || '',
     })
 
     // Load AI generated post from sessionStorage
@@ -96,6 +97,13 @@ export function PostEditor({ post, categories, columnists }: PostEditorProps) {
             }
         }
     }, [searchParams, post])
+
+    useEffect(() => {
+        const presetEventId = searchParams.get('event_id')
+        if (presetEventId && !post?.event_id) {
+            setFormData((prev) => ({ ...prev, event_id: presetEventId }))
+        }
+    }, [searchParams, post?.event_id])
 
     // Intelligent metrics
     const readingTime = useMemo(() => calculateReadingTime(formData.content), [formData.content])

@@ -122,6 +122,68 @@ export async function createOrUpdateGallery(data: {
     return result.data
 }
 
+export async function ensureGalleryForEvent(eventId: string) {
+    const existing = await getGalleryByEventId(eventId)
+    if (existing) return existing
+
+    return createOrUpdateGallery({
+        event_id: eventId,
+        title: 'Galeria de Fotos',
+        is_public: true,
+    })
+}
+
+export async function attachExistingEventPhotos(galleryId: string, photoIds: string[]) {
+    if (!photoIds.length) return []
+
+    const supabase = createAdminClient()
+    const { data: sources, error: fetchError } = await supabase
+        .from('event_photos')
+        .select('original_url, watermarked_url, thumbnail_url, file_size')
+        .in('id', photoIds)
+
+    if (fetchError) throw fetchError
+    if (!sources?.length) throw new Error('Nenhuma foto encontrada para copiar.')
+
+    const { count } = await supabase
+        .from('event_photos')
+        .select('id', { count: 'exact', head: true })
+        .eq('gallery_id', galleryId)
+
+    let order = count ?? 0
+    const rows = sources.map((s) => ({
+        gallery_id: galleryId,
+        original_url: s.original_url,
+        watermarked_url: s.watermarked_url,
+        thumbnail_url: s.thumbnail_url,
+        file_size: s.file_size,
+        display_order: order++,
+    }))
+
+    const { data, error } = await supabase.from('event_photos').insert(rows).select()
+    if (error) throw error
+
+    revalidatePath('/cms/events')
+    revalidatePath('/events')
+    return data
+}
+
+export async function searchEventGalleries(query: string, excludeEventId?: string) {
+    const supabase = createAdminClient()
+    let q = supabase
+        .from('event_photo_galleries')
+        .select('id, title, event_id, events!inner(id, title, slug), photos:event_photos(id, thumbnail_url, watermarked_url)')
+        .order('created_at', { ascending: false })
+        .limit(20)
+
+    if (excludeEventId) q = q.neq('event_id', excludeEventId)
+    if (query.trim()) q = q.ilike('events.title', `%${query.trim()}%`)
+
+    const { data, error } = await q
+    if (error) throw error
+    return data ?? []
+}
+
 type UploadedObject = { bucket: 'event-photos-original' | 'event-photos-public'; path: string }
 
 async function rollbackUploaded(supabase: ReturnType<typeof createAdminClient>, uploaded: UploadedObject[]) {
@@ -130,14 +192,129 @@ async function rollbackUploaded(supabase: ReturnType<typeof createAdminClient>, 
     }
 }
 
+async function insertProcessedPhotoFromBuffer(
+    supabase: ReturnType<typeof createAdminClient>,
+    galleryId: string,
+    buffer: Buffer,
+    mimeType: string,
+    fileSize: number,
+    sourceLabel: string,
+) {
+    const processingConfig = getEventPhotoProcessingConfig()
+    const watermarkBuffer = await getWatermarkBuffer()
+
+    const ext =
+        mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+
+    let publicBuffer: Buffer
+    let thumbnailBuffer: Buffer
+    try {
+        publicBuffer = await renderPublicWebp(buffer, watermarkBuffer, processingConfig)
+        thumbnailBuffer = await renderThumbnailWebp(buffer, watermarkBuffer, processingConfig)
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        throw new Error(`Falha ao processar ${sourceLabel}: ${msg}`)
+    }
+
+    const originalPath = `${galleryId}/${fileName}.${ext}`
+    const publicPath = `${galleryId}/${fileName}_public.webp`
+    const thumbPath = `${galleryId}/${fileName}_thumb.webp`
+    const uploaded: UploadedObject[] = []
+
+    try {
+        const { error: originalError } = await supabase.storage
+            .from('event-photos-original')
+            .upload(originalPath, buffer, { contentType: mimeType, upsert: false })
+
+        if (originalError) throw originalError
+        uploaded.push({ bucket: 'event-photos-original', path: originalPath })
+
+        const { error: publicError } = await supabase.storage
+            .from('event-photos-public')
+            .upload(publicPath, publicBuffer, { contentType: 'image/webp', upsert: false })
+
+        if (publicError) throw publicError
+        uploaded.push({ bucket: 'event-photos-public', path: publicPath })
+
+        const { error: thumbError } = await supabase.storage
+            .from('event-photos-public')
+            .upload(thumbPath, thumbnailBuffer, { contentType: 'image/webp', upsert: false })
+
+        if (thumbError) throw thumbError
+        uploaded.push({ bucket: 'event-photos-public', path: thumbPath })
+
+        const { data: publicUrl } = supabase.storage.from('event-photos-public').getPublicUrl(publicPath)
+        const { data: thumbUrl } = supabase.storage.from('event-photos-public').getPublicUrl(thumbPath)
+        const { data: originalUrl } = supabase.storage
+            .from('event-photos-original')
+            .getPublicUrl(originalPath)
+
+        const { data: photoRecord, error: photoError } = await supabase
+            .from('event_photos')
+            .insert([
+                {
+                    gallery_id: galleryId,
+                    original_url: originalUrl.publicUrl,
+                    watermarked_url: publicUrl.publicUrl,
+                    thumbnail_url: thumbUrl.publicUrl,
+                    file_size: fileSize,
+                    display_order: 0,
+                },
+            ])
+            .select()
+            .single()
+
+        if (photoError) throw photoError
+        return photoRecord
+    } catch (e) {
+        await rollbackUploaded(supabase, uploaded)
+        throw e
+    }
+}
+
+export async function attachMediaToEventGallery(galleryId: string, mediaIds: string[]) {
+    if (!mediaIds.length) return []
+
+    const supabase = createAdminClient()
+    const { data: mediaRows, error } = await supabase
+        .from('media')
+        .select('id, url, filename, mime_type, filesize')
+        .in('id', mediaIds)
+
+    if (error) throw error
+    if (!mediaRows?.length) throw new Error('Mídia não encontrada.')
+
+    const uploaded: any[] = []
+    for (const item of mediaRows) {
+        const res = await fetch(item.url)
+        if (!res.ok) {
+            throw new Error(`Falha ao baixar ${item.filename ?? item.id}`)
+        }
+        const buffer = Buffer.from(await res.arrayBuffer())
+        const mime = item.mime_type || 'image/jpeg'
+        const photo = await insertProcessedPhotoFromBuffer(
+            supabase,
+            galleryId,
+            buffer,
+            mime,
+            item.filesize ?? buffer.length,
+            item.filename ?? `media-${item.id}`,
+        )
+        uploaded.push(photo)
+    }
+
+    revalidatePath('/cms/events')
+    revalidatePath('/events')
+    return uploaded
+}
+
 export async function uploadEventPhotos(galleryId: string, formData: FormData) {
     const supabase = createAdminClient()
     const files = formData.getAll('photos') as File[]
 
     if (!files.length) throw new Error('Nenhuma foto enviada')
 
-    const processingConfig = getEventPhotoProcessingConfig()
-    const watermarkBuffer = await getWatermarkBuffer()
     const uploadedPhotos: any[] = []
 
     for (const file of files) {
@@ -149,79 +326,15 @@ export async function uploadEventPhotos(galleryId: string, formData: FormData) {
         }
 
         const buffer = Buffer.from(await file.arrayBuffer())
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-        const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-
-        let publicBuffer: Buffer
-        let thumbnailBuffer: Buffer
-        try {
-            publicBuffer = await renderPublicWebp(buffer, watermarkBuffer, processingConfig)
-            thumbnailBuffer = await renderThumbnailWebp(buffer, watermarkBuffer, processingConfig)
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e)
-            throw new Error(`Falha ao processar ${file.name}: ${msg}`)
-        }
-
-        const originalPath = `${galleryId}/${fileName}.${ext}`
-        const publicPath = `${galleryId}/${fileName}_public.webp`
-        const thumbPath = `${galleryId}/${fileName}_thumb.webp`
-        const uploaded: UploadedObject[] = []
-
-        try {
-            const { error: originalError } = await supabase
-                .storage
-                .from('event-photos-original')
-                .upload(originalPath, buffer, {
-                    contentType: file.type,
-                    upsert: false,
-                })
-
-            if (originalError) throw originalError
-            uploaded.push({ bucket: 'event-photos-original', path: originalPath })
-
-            const { error: publicError } = await supabase.storage.from('event-photos-public').upload(publicPath, publicBuffer, {
-                contentType: 'image/webp',
-                upsert: false,
-            })
-
-            if (publicError) throw publicError
-            uploaded.push({ bucket: 'event-photos-public', path: publicPath })
-
-            const { error: thumbError } = await supabase.storage.from('event-photos-public').upload(thumbPath, thumbnailBuffer, {
-                contentType: 'image/webp',
-                upsert: false,
-            })
-
-            if (thumbError) throw thumbError
-            uploaded.push({ bucket: 'event-photos-public', path: thumbPath })
-
-            const { data: publicUrl } = supabase.storage.from('event-photos-public').getPublicUrl(publicPath)
-
-            const { data: thumbUrl } = supabase.storage.from('event-photos-public').getPublicUrl(thumbPath)
-
-            const { data: originalUrl } = supabase.storage.from('event-photos-original').getPublicUrl(originalPath)
-
-            const { data: photoRecord, error: photoError } = await supabase
-                .from('event_photos')
-                .insert([
-                    {
-                        gallery_id: galleryId,
-                        original_url: originalUrl.publicUrl,
-                        watermarked_url: publicUrl.publicUrl,
-                        thumbnail_url: thumbUrl.publicUrl,
-                        file_size: file.size,
-                        display_order: 0,
-                    },
-                ])
-                .select()
-                .single()
-
-            if (photoError) throw photoError
-            uploadedPhotos.push(photoRecord)
-        } catch (e) {
-            await rollbackUploaded(supabase, uploaded)
-            throw e
-        }
+        const photo = await insertProcessedPhotoFromBuffer(
+            supabase,
+            galleryId,
+            buffer,
+            file.type,
+            file.size,
+            file.name,
+        )
+        uploadedPhotos.push(photo)
     }
 
     revalidatePath('/cms/events')

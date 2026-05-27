@@ -1,7 +1,7 @@
-import { getEvents, getEventBySlug, getImageUrl } from '@/lib/supabase/api'
+import { getEvents, getEventBySlug, getPostsByEventSlug } from '@/lib/supabase/api'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
-import { MapPin, ArrowLeft, ExternalLink, Camera, Download } from 'lucide-react'
+import { MapPin, ArrowLeft, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -14,6 +14,8 @@ import { EventSpeakers } from '@/components/event-speakers'
 import { getGalleryByEventSlug } from '@/lib/actions/cms-event-photos'
 import { getEventVideosBySlug } from '@/lib/actions/cms-event-videos'
 import { EventVideoEmbeds } from '@/components/events/EventVideoEmbeds'
+import { EventInlineGallery } from '@/components/events/EventInlineGallery'
+import { EventCoveragePosts } from '@/components/events/EventCoveragePosts'
 
 // Força renderização dinâmica para evitar erros de serialização durante build
 export const dynamic = 'force-dynamic'
@@ -64,10 +66,13 @@ export default async function EventPage({ params }: EventPageProps) {
     notFound()
   }
 
-  const [gallery, eventVideos] = await Promise.all([
+  const [gallery, eventVideos, coveragePosts] = await Promise.all([
     getGalleryByEventSlug(params.slug),
     getEventVideosBySlug(params.slug),
+    getPostsByEventSlug(params.slug),
   ])
+
+  const galleryPhotos = gallery?.photos ?? []
 
   const startDate = new Date(event.event_date || event.date)
   const endDate = event.end_date ? new Date(event.end_date) : null
@@ -138,29 +143,6 @@ export default async function EventPage({ params }: EventPageProps) {
         </div>
       </div>
 
-      {gallery && (
-        <div className="container mx-auto px-4 mb-6 flex flex-wrap gap-3">
-          <Link href={`/events/${params.slug}/gallery`}>
-            <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-bold gap-2 shadow-lg">
-              <Camera className="h-5 w-5" />
-              Ver Galeria de Fotos ({gallery.photos?.length || 0})
-            </Button>
-          </Link>
-          {gallery.drive_download_url && (
-            <a href={gallery.drive_download_url} target="_blank" rel="noopener noreferrer">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-orange-300 text-orange-700 hover:bg-orange-50 font-bold gap-2 shadow-md"
-              >
-                <Download className="h-5 w-5" />
-                Baixar fotos no Drive
-              </Button>
-            </a>
-          )}
-        </div>
-      )}
-
       <article className="container mx-auto px-4 pb-12 max-w-6xl">
         {/* Card de Data Destacado */}
         <div className="mb-8">
@@ -186,7 +168,7 @@ export default async function EventPage({ params }: EventPageProps) {
         )}
 
         {/* Botão de Inscrição Principal */}
-        {event.registration_url && event.status === 'upcoming' && (
+        {event.registration_url && (
           <div className="mb-12 text-center p-8 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 rounded-xl shadow-xl border-2 border-orange-600">
             <h2 className="text-3xl font-bold text-white mb-3">Não perca esta oportunidade!</h2>
             <p className="text-white/95 mb-6 text-lg font-medium">
@@ -207,6 +189,20 @@ export default async function EventPage({ params }: EventPageProps) {
         )}
 
         <EventVideoEmbeds videos={eventVideos} className="mb-12" />
+
+        {galleryPhotos.length > 0 && (
+          <EventInlineGallery
+            photos={galleryPhotos}
+            driveDownloadUrl={gallery?.drive_download_url}
+          />
+        )}
+
+        {coveragePosts.length > 0 && (
+          <section id="cobertura" className="mb-12 scroll-mt-24">
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Cobertura</h2>
+            <EventCoveragePosts posts={coveragePosts} />
+          </section>
+        )}
 
         {/* Descrição do Evento */}
         {event.description && (
@@ -244,7 +240,7 @@ export default async function EventPage({ params }: EventPageProps) {
         />
 
         {/* CTA Final */}
-        {event.registration_url && event.status === 'upcoming' && (
+        {event.registration_url && (
           <div className="mt-12 pt-12 border-t-2 border-orange-200 text-center bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-8">
             <h3 className="text-2xl font-bold mb-4 text-orange-900">Pronto para participar?</h3>
             <p className="text-orange-800 mb-6 text-lg font-medium">
