@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Plus, Trash2, Calendar, MapPin, Loader2, Link as LinkIcon, Save, ArrowLeft, Camera, Image as ImageIcon } from 'lucide-react'
+import { Trash2, Calendar, MapPin, Loader2, Link as LinkIcon, Save, ArrowLeft, Camera, Image as ImageIcon, Youtube, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,6 +12,8 @@ import { getGalleryByEventId, createOrUpdateGallery, deleteGallery } from '@/lib
 import { CoverImageUpload } from './CoverImageUpload'
 import { GalleryUploader } from './GalleryUploader'
 import { GalleryPhotoGrid } from './GalleryPhotoGrid'
+import { EventVideosEditor } from './EventVideosEditor'
+import { getEventVideos } from '@/lib/actions/cms-event-videos'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -19,10 +21,48 @@ interface EventEditorProps {
     event?: any
 }
 
+/** ISO date strings from Postgres can shift calendar day when parsed as UTC; keep YYYY-MM-DD stable for <input type="date">. */
+function formatDateInputValue(value: string | undefined | null): string {
+    if (!value) return ''
+    const s = String(value)
+    const ymd = s.slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd
+    const d = new Date(s)
+    if (Number.isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function buildInitialEvent(evt?: any) {
+    const base = {
+        title: '',
+        slug: '',
+        event_date: '',
+        location: '',
+        description: '',
+        status: 'upcoming',
+        registration_url: '',
+        cover_image_url: '',
+    }
+    if (!evt) return base
+    return {
+        ...base,
+        ...evt,
+        title: evt.title ?? '',
+        slug: evt.slug ?? '',
+        event_date: evt.event_date ?? '',
+        location: evt.location ?? '',
+        description: typeof evt.description === 'string' ? evt.description : '',
+        status: evt.status ?? 'upcoming',
+        registration_url: evt.registration_url ?? '',
+        cover_image_url: evt.cover_image_url ?? '',
+    }
+}
+
 export function EventEditor({ event }: EventEditorProps) {
     const router = useRouter()
     const [loading, setLoading] = useState(false)
-    const [activeTab, setActiveTab] = useState<'details' | 'gallery'>('details')
+    const [activeTab, setActiveTab] = useState<'details' | 'gallery' | 'videos'>('details')
     const [gallery, setGallery] = useState<any>(null)
     const [galleryLoading, setGalleryLoading] = useState(false)
     const [galleryForm, setGalleryForm] = useState({
@@ -30,28 +70,29 @@ export function EventEditor({ event }: EventEditorProps) {
         description: '',
         is_public: true,
         contact_email: '',
-        contact_whatsapp: ''
+        contact_whatsapp: '',
+        drive_download_url: '',
     })
-    const [currentEvent, setCurrentEvent] = useState<any>(event || {
-        title: '',
-        event_date: '',
-        location: '',
-        description: '',
-        status: 'upcoming',
-        registration_url: '',
-        cover_image_url: ''
-    })
+    const [eventVideos, setEventVideos] = useState<any[]>([])
+    const [videosLoading, setVideosLoading] = useState(false)
+    const [currentEvent, setCurrentEvent] = useState<any>(() => buildInitialEvent(event))
 
-    const handleSave = async (e: React.FormEvent) => {
-        e.preventDefault()
+    const handleSave = async (e?: React.FormEvent) => {
+        e?.preventDefault()
         setLoading(true)
         try {
-            await saveEvent(currentEvent)
+            const saved = await saveEvent(currentEvent)
+            setCurrentEvent((prev: any) => ({ ...prev, ...saved }))
             toast.success('Evento salvo com sucesso!')
-            router.push('/cms/events')
+            if (!currentEvent.id && saved?.id) {
+                router.replace(`/cms/events/${saved.id}`)
+            } else {
+                router.refresh()
+            }
         } catch (error) {
             console.error('Erro ao salvar evento:', error)
-            toast.error('Erro ao salvar evento.')
+            const message = error instanceof Error ? error.message : 'Erro ao salvar evento.'
+            toast.error(message)
         }
         setLoading(false)
     }
@@ -80,7 +121,8 @@ export function EventEditor({ event }: EventEditorProps) {
                     description: data.description || '',
                     is_public: data.is_public !== false,
                     contact_email: data.contact_email || '',
-                    contact_whatsapp: data.contact_whatsapp || ''
+                    contact_whatsapp: data.contact_whatsapp || '',
+                    drive_download_url: data.drive_download_url || '',
                 })
             }
         } catch (error) {
@@ -89,9 +131,22 @@ export function EventEditor({ event }: EventEditorProps) {
         setGalleryLoading(false)
     }
 
+    const fetchVideos = async () => {
+        if (!currentEvent.id) return
+        setVideosLoading(true)
+        try {
+            const data = await getEventVideos(currentEvent.id)
+            setEventVideos(data)
+        } catch (error) {
+            console.error('Erro ao buscar vídeos:', error)
+        }
+        setVideosLoading(false)
+    }
+
     useEffect(() => {
         if (currentEvent.id) {
             fetchGallery()
+            fetchVideos()
         }
     }, [currentEvent.id])
 
@@ -129,7 +184,8 @@ export function EventEditor({ event }: EventEditorProps) {
                 description: '',
                 is_public: true,
                 contact_email: '',
-                contact_whatsapp: ''
+                contact_whatsapp: '',
+                drive_download_url: '',
             })
             toast.success('Galeria excluída!')
         } catch (error) {
@@ -167,7 +223,8 @@ export function EventEditor({ event }: EventEditorProps) {
                         </Button>
                     )}
                     <Button
-                        onClick={handleSave}
+                        type="button"
+                        onClick={() => handleSave()}
                         disabled={loading}
                         className="bg-orange-500 hover:bg-orange-600 text-white font-bold min-w-[140px]"
                     >
@@ -203,6 +260,23 @@ export function EventEditor({ event }: EventEditorProps) {
                     Galeria de Fotos
                     {gallery && <span className="bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full">{gallery.photos?.length || 0}</span>}
                 </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('videos')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                        activeTab === 'videos'
+                            ? 'border-orange-500 text-orange-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                    <Youtube className="w-4 h-4" />
+                    Vídeos
+                    {eventVideos.length > 0 && (
+                        <span className="bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full">
+                            {eventVideos.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {activeTab === 'details' && (
@@ -215,7 +289,12 @@ export function EventEditor({ event }: EventEditorProps) {
                                 <Label>Nome do Evento</Label>
                                 <Input
                                     value={currentEvent.title}
-                                    onChange={(e) => setCurrentEvent({ ...currentEvent, title: e.target.value })}
+                                    onChange={(e) =>
+                                        setCurrentEvent((prev: any) => ({
+                                            ...prev,
+                                            title: e.target.value,
+                                        }))
+                                    }
                                     placeholder="Ex: Congresso Saúde Digital 2026"
                                     className="text-lg font-medium"
                                     required
@@ -223,10 +302,33 @@ export function EventEditor({ event }: EventEditorProps) {
                             </div>
 
                             <div className="space-y-2">
+                                <Label>Slug (URL pública)</Label>
+                                <Input
+                                    value={currentEvent.slug ?? ''}
+                                    onChange={(e) =>
+                                        setCurrentEvent((prev: any) => ({
+                                            ...prev,
+                                            slug: e.target.value,
+                                        }))
+                                    }
+                                    placeholder="Deixe em branco para gerar automaticamente a partir do nome"
+                                    className="font-mono text-sm"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Ex.: <span className="font-mono">/events/seu-slug-aqui</span>
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
                                 <Label>Descrição</Label>
                                 <textarea
                                     value={currentEvent.description}
-                                    onChange={(e) => setCurrentEvent({ ...currentEvent, description: e.target.value })}
+                                    onChange={(e) =>
+                                        setCurrentEvent((prev: any) => ({
+                                            ...prev,
+                                            description: e.target.value,
+                                        }))
+                                    }
                                     className="w-full bg-white border border-gray-200 rounded-md p-3 text-gray-700 text-sm min-h-[150px] outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-y"
                                     placeholder="Descreva os detalhes do evento, programação, palestrantes, etc..."
                                 />
@@ -236,7 +338,12 @@ export function EventEditor({ event }: EventEditorProps) {
                                 <Label>Imagem de Capa</Label>
                                 <CoverImageUpload
                                     value={currentEvent.cover_image_url}
-                                    onChange={(url) => setCurrentEvent({ ...currentEvent, cover_image_url: url })}
+                                    onChange={(url) =>
+                                        setCurrentEvent((prev: any) => ({
+                                            ...prev,
+                                            cover_image_url: url ?? '',
+                                        }))
+                                    }
                                 />
                             </div>
                         </div>
@@ -251,7 +358,12 @@ export function EventEditor({ event }: EventEditorProps) {
                                 <Label className="text-xs font-bold text-gray-500 uppercase">Status</Label>
                                 <select
                                     value={currentEvent.status}
-                                    onChange={(e) => setCurrentEvent({ ...currentEvent, status: e.target.value })}
+                                    onChange={(e) =>
+                                        setCurrentEvent((prev: any) => ({
+                                            ...prev,
+                                            status: e.target.value,
+                                        }))
+                                    }
                                     className="w-full bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-md px-3 h-10 outline-none focus:ring-2 focus:ring-orange-500"
                                 >
                                     <option value="upcoming">Em breve</option>
@@ -265,8 +377,13 @@ export function EventEditor({ event }: EventEditorProps) {
                                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <Input
                                         type="date"
-                                        value={currentEvent.event_date ? new Date(currentEvent.event_date).toISOString().split('T')[0] : ''}
-                                        onChange={(e) => setCurrentEvent({ ...currentEvent, event_date: e.target.value })}
+                                        value={formatDateInputValue(currentEvent.event_date)}
+                                        onChange={(e) =>
+                                            setCurrentEvent((prev: any) => ({
+                                                ...prev,
+                                                event_date: e.target.value,
+                                            }))
+                                        }
                                         className="pl-9"
                                         required
                                     />
@@ -279,7 +396,12 @@ export function EventEditor({ event }: EventEditorProps) {
                                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <Input
                                         value={currentEvent.location}
-                                        onChange={(e) => setCurrentEvent({ ...currentEvent, location: e.target.value })}
+                                        onChange={(e) =>
+                                            setCurrentEvent((prev: any) => ({
+                                                ...prev,
+                                                location: e.target.value,
+                                            }))
+                                        }
                                         placeholder="Local ou Online"
                                         className="pl-9"
                                     />
@@ -292,7 +414,12 @@ export function EventEditor({ event }: EventEditorProps) {
                                     <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <Input
                                         value={currentEvent.registration_url}
-                                        onChange={(e) => setCurrentEvent({ ...currentEvent, registration_url: e.target.value })}
+                                        onChange={(e) =>
+                                            setCurrentEvent((prev: any) => ({
+                                                ...prev,
+                                                registration_url: e.target.value,
+                                            }))
+                                        }
                                         placeholder="https://..."
                                         className="pl-9"
                                     />
@@ -323,6 +450,9 @@ export function EventEditor({ event }: EventEditorProps) {
                                     <Camera className="w-5 h-5 text-orange-500" />
                                     Configurações da Galeria
                                 </h3>
+                                <p className="text-sm text-gray-500">
+                                    As fotos enviadas recebem marca d&apos;água automaticamente na versão pública.
+                                </p>
 
                                 <div className="space-y-2">
                                     <Label>Título da Galeria</Label>
@@ -349,6 +479,23 @@ export function EventEditor({ event }: EventEditorProps) {
                                         checked={galleryForm.is_public}
                                         onCheckedChange={(checked) => setGalleryForm({ ...galleryForm, is_public: checked })}
                                     />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        <Download className="w-4 h-4 text-gray-400" />
+                                        Link do Google Drive (download das fotos)
+                                    </Label>
+                                    <Input
+                                        value={galleryForm.drive_download_url}
+                                        onChange={(e) =>
+                                            setGalleryForm({ ...galleryForm, drive_download_url: e.target.value })
+                                        }
+                                        placeholder="https://drive.google.com/drive/folders/..."
+                                    />
+                                    <p className="text-xs text-gray-500">
+                                        Link compartilhado do Drive para o visitante baixar as fotos em alta qualidade.
+                                    </p>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -423,6 +570,27 @@ export function EventEditor({ event }: EventEditorProps) {
                             )}
                         </>
                     )}
+                </div>
+            )}
+
+            {activeTab === 'videos' && (
+                <div className="space-y-6">
+                    {!currentEvent.id && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            Use <strong>Criar Evento</strong> acima para salvar o evento antes de anexar vídeos.
+                        </div>
+                    )}
+                    {videosLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+                        </div>
+                    ) : currentEvent.id ? (
+                        <EventVideosEditor
+                            eventId={currentEvent.id}
+                            videos={eventVideos}
+                            onChange={fetchVideos}
+                        />
+                    ) : null}
                 </div>
             )}
         </div>

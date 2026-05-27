@@ -1,7 +1,7 @@
 import { getEventBySlug, getEvents } from '@/lib/supabase/api'
 import { getGalleryByEventSlug } from '@/lib/actions/cms-event-photos'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Mail, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Mail, MessageCircle, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { GalleryClient } from './GalleryClient'
@@ -83,7 +83,20 @@ export default async function GalleryPage({ params }: GalleryPageProps) {
                         Entre em contato conosco para receber as imagens originais sem marca d'água.
                     </p>
                     
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap">
+                        {gallery.drive_download_url && (
+                            <a
+                                href={gallery.drive_download_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex"
+                            >
+                                <Button size="lg" className="bg-white text-orange-600 hover:bg-orange-50 font-bold gap-2">
+                                    <Download className="h-5 w-5" />
+                                    Baixar fotos no Drive
+                                </Button>
+                            </a>
+                        )}
                         {gallery.contact_email && (
                             <a 
                                 href={`mailto:${gallery.contact_email}?subject=Solicitação de Fotos - ${event.title}`}
@@ -108,7 +121,7 @@ export default async function GalleryPage({ params }: GalleryPageProps) {
                                 </Button>
                             </a>
                         )}
-                        {!gallery.contact_email && !gallery.contact_whatsapp && (
+                        {!gallery.drive_download_url && !gallery.contact_email && !gallery.contact_whatsapp && (
                             <p className="text-white/80 text-sm">
                                 Informações de contato em breve.
                             </p>

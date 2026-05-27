@@ -1,7 +1,8 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { Plus, MapPin, Calendar, Camera } from 'lucide-react'
+import { Plus, MapPin, Calendar, Camera, Youtube } from 'lucide-react'
+import { getEventVideos } from '@/lib/actions/cms-event-videos'
 import { getGalleryByEventId } from '@/lib/actions/cms-event-photos'
 import { Button } from '@/components/ui/button'
 import { DataTable } from '@/components/cms/DataTable'
@@ -22,10 +23,19 @@ export default function CMSEventsPage() {
             const eventsWithGallery = await Promise.all(
                 (data || []).map(async (event: any) => {
                     try {
-                        const gallery = await getGalleryByEventId(event.id)
-                        return { ...event, has_gallery: !!gallery, photo_count: gallery?.photos?.length || 0 }
+                        const [gallery, videos] = await Promise.all([
+                            getGalleryByEventId(event.id),
+                            getEventVideos(event.id),
+                        ])
+                        return {
+                            ...event,
+                            has_gallery: !!gallery,
+                            photo_count: gallery?.photos?.length || 0,
+                            has_drive: !!gallery?.drive_download_url,
+                            video_count: videos?.length || 0,
+                        }
                     } catch {
-                        return { ...event, has_gallery: false, photo_count: 0 }
+                        return { ...event, has_gallery: false, photo_count: 0, has_drive: false, video_count: 0 }
                     }
                 })
             )
@@ -51,12 +61,21 @@ export default function CMSEventsPage() {
             render: (item: any) => (
                 <div className="flex flex-col">
                     <span className="font-bold text-gray-900">{item.title}</span>
-                    {item.has_gallery && (
-                        <div className="flex items-center gap-1 mt-1">
-                            <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">
-                                <Camera className="w-2.5 h-2.5" />
-                                {item.photo_count} foto(s)
-                            </span>
+                    {(item.has_gallery || item.video_count > 0) && (
+                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {item.has_gallery && (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-medium">
+                                    <Camera className="w-2.5 h-2.5" />
+                                    {item.photo_count} foto(s)
+                                    {item.has_drive ? ' · Drive' : ''}
+                                </span>
+                            )}
+                            {item.video_count > 0 && (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">
+                                    <Youtube className="w-2.5 h-2.5" />
+                                    {item.video_count} vídeo(s)
+                                </span>
+                            )}
                         </div>
                     )}
                     <div className="flex items-center gap-2 text-[10px] text-gray-500 mt-0.5">

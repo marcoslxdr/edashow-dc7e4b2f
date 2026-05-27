@@ -1,7 +1,7 @@
 import { getEvents, getEventBySlug, getImageUrl } from '@/lib/supabase/api'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
-import { MapPin, ArrowLeft, ExternalLink, Camera } from 'lucide-react'
+import { MapPin, ArrowLeft, ExternalLink, Camera, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -12,6 +12,8 @@ import { EventOrganizers } from '@/components/event-organizers'
 import { EventSponsors } from '@/components/event-sponsors'
 import { EventSpeakers } from '@/components/event-speakers'
 import { getGalleryByEventSlug } from '@/lib/actions/cms-event-photos'
+import { getEventVideosBySlug } from '@/lib/actions/cms-event-videos'
+import { EventVideoEmbeds } from '@/components/events/EventVideoEmbeds'
 
 // Força renderização dinâmica para evitar erros de serialização durante build
 export const dynamic = 'force-dynamic'
@@ -62,7 +64,10 @@ export default async function EventPage({ params }: EventPageProps) {
     notFound()
   }
 
-  const gallery = await getGalleryByEventSlug(params.slug)
+  const [gallery, eventVideos] = await Promise.all([
+    getGalleryByEventSlug(params.slug),
+    getEventVideosBySlug(params.slug),
+  ])
 
   const startDate = new Date(event.event_date || event.date)
   const endDate = event.end_date ? new Date(event.end_date) : null
@@ -134,13 +139,25 @@ export default async function EventPage({ params }: EventPageProps) {
       </div>
 
       {gallery && (
-        <div className="container mx-auto px-4 mb-6">
+        <div className="container mx-auto px-4 mb-6 flex flex-wrap gap-3">
           <Link href={`/events/${params.slug}/gallery`}>
             <Button size="lg" className="bg-orange-500 hover:bg-orange-600 text-white font-bold gap-2 shadow-lg">
               <Camera className="h-5 w-5" />
               Ver Galeria de Fotos ({gallery.photos?.length || 0})
             </Button>
           </Link>
+          {gallery.drive_download_url && (
+            <a href={gallery.drive_download_url} target="_blank" rel="noopener noreferrer">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-orange-300 text-orange-700 hover:bg-orange-50 font-bold gap-2 shadow-md"
+              >
+                <Download className="h-5 w-5" />
+                Baixar fotos no Drive
+              </Button>
+            </a>
+          )}
         </div>
       )}
 
@@ -188,6 +205,8 @@ export default async function EventPage({ params }: EventPageProps) {
             </a>
           </div>
         )}
+
+        <EventVideoEmbeds videos={eventVideos} className="mb-12" />
 
         {/* Descrição do Evento */}
         {event.description && (

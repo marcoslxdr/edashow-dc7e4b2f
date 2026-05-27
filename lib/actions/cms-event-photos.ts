@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { getEventPhotoProcessingConfig } from '@/lib/event-photos/config'
+import { isValidDriveUrl } from '@/lib/event-videos/parse-url'
 import { renderPublicWebp, renderThumbnailWebp } from '@/lib/event-photos/process-variants'
 import { revalidatePath } from 'next/cache'
 import { readFile } from 'fs/promises'
@@ -82,14 +83,23 @@ export async function createOrUpdateGallery(data: {
     is_public?: boolean
     contact_email?: string
     contact_whatsapp?: string
+    drive_download_url?: string
 }) {
     if (!data.event_id || typeof data.event_id !== 'string') {
         throw new Error('Salve o evento antes de criar a galeria (evento precisa existir no banco).')
     }
 
     const supabase = createAdminClient()
-    
+
+    const driveRaw = data.drive_download_url?.trim()
+    if (driveRaw && !isValidDriveUrl(driveRaw)) {
+        throw new Error('Use um link válido do Google Drive (drive.google.com).')
+    }
+
     const { id, ...galleryData } = data
+    if ('drive_download_url' in galleryData) {
+        galleryData.drive_download_url = driveRaw || null
+    }
     
     let result
     if (id) {

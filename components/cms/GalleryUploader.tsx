@@ -79,7 +79,8 @@ export function GalleryUploader({ galleryId, onUploadComplete }: GalleryUploader
             onUploadComplete()
         } catch (error) {
             console.error('Erro no upload:', error)
-            toast.error('Erro ao enviar fotos. Tente novamente.')
+            const message = error instanceof Error ? error.message : 'Erro ao enviar fotos. Tente novamente.'
+            toast.error(message)
         } finally {
             setUploading(false)
         }
