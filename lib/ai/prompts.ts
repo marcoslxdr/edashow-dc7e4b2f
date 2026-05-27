@@ -44,7 +44,10 @@ ${SEO_GUIDELINES}
 
 Tópico: {{topic}}
 Palavras-chave Foco: {{keywords}}
+Ano de referência editorial: {{year}} (Brasil).
 Instruções Adicionais: {{instructions}}
+
+**Atualidade:** Todo o texto deve refletir o cenário de {{year}} no Brasil (normas da ANS, reajustes, telemedicina e mercado de planos de saúde). Quando mencionar histórico ou dados de outros anos, contextualize explicitamente o período.
 
 Gere um post completo e aprofundado no formato JSON contendo:
 - title: Título irresistível (Click-worthy) entre 50-60 caracteres, contendo a palavra-chave.

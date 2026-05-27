@@ -2,6 +2,8 @@
  * 100 palavras-chave sobre planos de saúde para geração automática de posts
  * Usadas pelo cron job para selecionar temas aleatórios diariamente
  */
+const Y = new Date().getFullYear()
+
 export const HEALTH_INSURANCE_KEYWORDS: string[] = [
   // Dúvidas e problemas comuns (1-10)
   'plano de saúde barato',
@@ -100,7 +102,7 @@ export const HEALTH_INSURANCE_KEYWORDS: string[] = [
   'plano de saúde com desconto em farmácia',
   'benefícios extras plano de saúde',
   'plano de saúde com telemedicina',
-  'reajuste plano de saúde 2025',
+  `reajuste plano de saúde ${Y}`,
   'faixa etária plano de saúde preço',
   // Tendências e novidades (91-100)
   'telemedicina plano de saúde',
@@ -112,7 +114,7 @@ export const HEALTH_INSURANCE_KEYWORDS: string[] = [
   'plano de saúde com desconto em academia',
   'plano de saúde sustentável',
   'plano de saúde pós-pandemia',
-  'novidades ANS 2025',
+  `novidades ANS ${Y}`,
 ]
 
 /**

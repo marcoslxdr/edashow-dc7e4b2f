@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server'
 import { generateAIPost } from '@/lib/actions/ai-posts'
 import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
+import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-const ADDITIONAL_INSTRUCTIONS = `Foque no contexto brasileiro de planos de saúde.
-Mencione a ANS (Agência Nacional de Saúde Suplementar) quando relevante.
-Inclua dicas práticas e acionáveis para o leitor.
-Use exemplos reais do mercado brasileiro.
-O conteúdo deve ser educativo e ajudar consumidores a tomar decisões informadas.
-Pesquise informações atualizadas sobre o tema.`
+const ADDITIONAL_INSTRUCTIONS = getProductionAdditionalInstructions()
 
 interface SavedPost {
   id: string

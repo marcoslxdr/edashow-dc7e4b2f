@@ -6,9 +6,14 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local', override: true })
 
 function main() {
-    const uri = process.env.DATABASE_URI?.trim()
+    const destRef = 'jqpbqrhlslgitifuliqa'
+    const uri =
+        process.env.MIGRATE_DEST_DATABASE_URI?.trim() ||
+        (process.env.DATABASE_URI?.includes(destRef) ? process.env.DATABASE_URI.trim() : '')
     if (!uri) {
-        console.error('Defina DATABASE_URI em .env.local (Supabase → Settings → Database → Connection string URI).')
+        console.error(
+            `Defina MIGRATE_DEST_DATABASE_URI em .env.local (Session :5432 do projeto ${destRef}).`,
+        )
         process.exit(1)
     }
 

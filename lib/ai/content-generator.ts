@@ -128,7 +128,8 @@ export async function generatePost(config: PostGenerationConfig): Promise<Genera
     const prompt = fillTemplate(POST_GENERATION_PROMPT, {
         topic: config.topic,
         keywords: config.keywords?.join(', ') || '',
-        instructions: config.additionalInstructions || ''
+        instructions: config.additionalInstructions || '',
+        year: String(new Date().getFullYear()),
     })
 
     const model = getModel(config.model)

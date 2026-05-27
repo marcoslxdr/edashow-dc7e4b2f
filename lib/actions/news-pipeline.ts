@@ -9,6 +9,7 @@ import { openrouter, MODELS } from '@/lib/ai/openrouter'
 import { searchImages, downloadAndSaveImage } from '@/lib/images/image-service'
 import { savePost } from '@/lib/actions/cms-posts'
 import { notifyOwner } from '@/lib/evolution/client'
+import { getEditorialYear, getEditorialYearPromptBlock } from '@/lib/ai/editorial-year'
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export interface NewsPipelineConfig {
 // ─── Google News RSS Search ──────────────────────────────────────────
 
 export async function searchGoogleNews(topic: string, count: number = 5): Promise<NewsItem[]> {
-  const query = encodeURIComponent(topic)
+  const query = encodeURIComponent(`${topic} ${getEditorialYear()}`)
   const url = `https://news.google.com/rss/search?q=${query}&hl=pt-BR&gl=BR&ceid=BR:pt-419`
 
   const response = await fetch(url, {
@@ -128,6 +129,8 @@ export async function extractArticleContent(url: string): Promise<string> {
 
 async function rewriteNewsArticle(content: string, topic: string): Promise<RewrittenArticle> {
   const prompt = `Escreva um artigo original e completo sobre: ${topic}
+
+Contexto temporal: ${getEditorialYearPromptBlock()}
 
 Use este conteudo como base e inspiracao:
 ---

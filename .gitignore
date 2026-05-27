@@ -28,6 +28,20 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
+.env.vercel.pull
+.env.prod
+.env.jqpb
+.env.jqpb-pull
+.env.jqpb.runtime
+.env.vercel.jqpb*
+.env.local.tmpbak
+
+# agent / migration cache (não versionar)
+.cache/
+.claude/worktrees/
+
+# Supabase migration backups (dados + SQL)
+/data/supabase-migration/
 
 # vercel
 .vercel

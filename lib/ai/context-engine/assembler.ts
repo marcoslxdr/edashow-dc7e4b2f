@@ -2,6 +2,7 @@ import { ContextConfig, Persona, KnowledgeBlock } from './types';
 import { EdaPro, EdaRaiz } from './personas';
 import { BrandVoice, SeoRules } from './knowledge/brand-voice';
 import { createAdminClient } from '@/lib/supabase/server';
+import { getEditorialYearPromptBlock } from '@/lib/ai/editorial-year';
 
 const LOCAL_PERSONAS: Record<string, Persona> = {
   'eda-pro': EdaPro,
@@ -96,6 +97,8 @@ export class ContextAssembler {
         prompt += `### REGRAS DE FORMATAÇÃO\n${seoRules.content}\n\n`;
       }
     }
+
+    prompt += `### ATUALIDADE EDITORIAL\n${getEditorialYearPromptBlock()}\n\n`;
 
     // Instruções Customizadas da Configuração
     if (config.customInstructions) {

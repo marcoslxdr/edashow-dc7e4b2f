@@ -13,6 +13,10 @@ ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
 ALTER TABLE public.sponsors 
 ADD COLUMN IF NOT EXISTS description TEXT;
 
+-- Legacy Payload media reference (opcional)
+ALTER TABLE public.sponsors
+ADD COLUMN IF NOT EXISTS logo_id UUID;
+
 -- Update existing sponsors to have sequential display_order
 DO $$
 DECLARE

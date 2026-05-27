@@ -39,29 +39,31 @@ const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'edashow'
 const WHATSAPP_NUMBERS = process.env.WHATSAPP_NUMBERS || ''
 const SERVER_URL = process.env.NEXT_PUBLIC_SERVER_URL || 'https://edashow.com.br'
 
-// 5 temas sobre planos de saúde
-const TOPICS = [
-  {
-    topic: 'Como escolher o melhor plano de saúde para sua família em 2026',
-    keywords: ['plano de saúde familiar', 'escolher plano de saúde', 'custo-benefício'],
-  },
-  {
-    topic: 'Telemedicina no plano de saúde: o que mudou em 2026',
-    keywords: ['telemedicina', 'plano de saúde digital', 'consulta online'],
-  },
-  {
-    topic: 'Entenda a carência do plano de saúde e como reduzi-la',
-    keywords: ['carência plano de saúde', 'prazo de carência', 'portabilidade'],
-  },
-  {
-    topic: 'Planos de saúde para MEI e autônomos: guia completo',
-    keywords: ['plano de saúde MEI', 'plano de saúde autônomo', 'plano de saúde barato'],
-  },
-  {
-    topic: 'O que fazer quando o plano de saúde nega cobertura',
-    keywords: ['plano de saúde negou cobertura', 'direitos beneficiário', 'ANS'],
-  },
-]
+function buildTopics(): { topic: string; keywords: string[] }[] {
+  const y = new Date().getFullYear()
+  return [
+    {
+      topic: `Como escolher o melhor plano de saúde para sua família em ${y}`,
+      keywords: ['plano de saúde familiar', 'escolher plano de saúde', 'custo-benefício'],
+    },
+    {
+      topic: `Telemedicina no plano de saúde: o que mudou em ${y}`,
+      keywords: ['telemedicina', 'plano de saúde digital', 'consulta online'],
+    },
+    {
+      topic: 'Entenda a carência do plano de saúde e como reduzi-la',
+      keywords: ['carência plano de saúde', 'prazo de carência', 'portabilidade'],
+    },
+    {
+      topic: 'Planos de saúde para MEI e autônomos: guia completo',
+      keywords: ['plano de saúde MEI', 'plano de saúde autônomo', 'plano de saúde barato'],
+    },
+    {
+      topic: 'O que fazer quando o plano de saúde nega cobertura',
+      keywords: ['plano de saúde negou cobertura', 'direitos beneficiário', 'ANS'],
+    },
+  ]
+}
 
 interface GeneratedPost {
   id?: string
@@ -89,10 +91,12 @@ function sanitizeJSON(raw: string): string {
 }
 
 async function generatePostWithAI(topic: string, keywords: string[]): Promise<GeneratedPost> {
+  const y = new Date().getFullYear()
   const systemPrompt = `Você é um redator especialista em saúde e planos de saúde do Brasil.
 Escreva em português do Brasil (PT-BR) com tom profissional, amigável e acessível.
 Use parágrafos curtos, subtítulos (H2, H3) e listas para facilitar a leitura.
 Otimize para SEO com a palavra-chave no título, primeiro parágrafo e subtítulos.
+O conteúdo deve refletir o cenário atual de ${y} no Brasil (regulamentação, mercado e exemplos vigentes).
 Responda APENAS em JSON válido. NÃO use caracteres de controle no JSON.`
 
   const userPrompt = `Gere um post completo sobre: ${topic}
@@ -488,6 +492,8 @@ async function main() {
   console.log('')
 
   const generatedPosts: GeneratedPost[] = []
+
+  const TOPICS = buildTopics()
 
   // Gera 5 posts
   for (let i = 0; i < TOPICS.length; i++) {
