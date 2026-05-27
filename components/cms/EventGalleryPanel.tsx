@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Camera, Download, Image as ImageIcon, Loader2, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +32,12 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
         contact_whatsapp: '',
         drive_download_url: '',
     })
+    const onGalleryChangeRef = useRef(onGalleryChange)
+    onGalleryChangeRef.current = onGalleryChange
+
+    const notifyGalleryChange = useCallback(() => {
+        onGalleryChangeRef.current?.()
+    }, [])
 
     const fetchGallery = useCallback(async () => {
         setLoading(true)
@@ -50,16 +56,20 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
             } else {
                 setGallery(null)
             }
-            onGalleryChange?.()
         } catch {
             toast.error('Erro ao carregar galeria.')
         }
         setLoading(false)
-    }, [eventId, onGalleryChange])
+    }, [eventId])
 
     useEffect(() => {
         fetchGallery()
     }, [fetchGallery])
+
+    const refreshGallery = useCallback(async () => {
+        await fetchGallery()
+        notifyGalleryChange()
+    }, [fetchGallery, notifyGalleryChange])
 
     const handleSaveGallery = async () => {
         try {
@@ -70,7 +80,7 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
             })
             setGallery((prev: any) => ({ ...prev, ...result }))
             toast.success('Galeria salva!')
-            await fetchGallery()
+            await refreshGallery()
         } catch (e) {
             toast.error(e instanceof Error ? e.message : 'Erro ao salvar galeria.')
         }
@@ -83,7 +93,7 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
             await deleteGallery(gallery.id)
             setGallery(null)
             toast.success('Galeria excluída.')
-            await fetchGallery()
+            await refreshGallery()
         } catch {
             toast.error('Erro ao excluir galeria.')
         }
@@ -103,7 +113,7 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
 
     const handlePrepareUpload = async () => {
         const id = await ensureGallery()
-        if (id) await fetchGallery()
+        if (id) await refreshGallery()
     }
 
     if (loading) {
@@ -210,7 +220,7 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
                     <PhotoSourcePicker
                         galleryId={gallery.id}
                         eventId={eventId}
-                        onRefresh={fetchGallery}
+                        onRefresh={refreshGallery}
                     />
                 )}
             </div>
@@ -220,7 +230,7 @@ export function EventGalleryPanel({ eventId, onGalleryChange }: EventGalleryPane
                     <h3 className="font-bold text-gray-900">
                         Fotos ({gallery.photos.length})
                     </h3>
-                    <GalleryPhotoGrid photos={gallery.photos} onUpdate={fetchGallery} />
+                    <GalleryPhotoGrid photos={gallery.photos} onUpdate={refreshGallery} />
                 </div>
             )}
         </div>

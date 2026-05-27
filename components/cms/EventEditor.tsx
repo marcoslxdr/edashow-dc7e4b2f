@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Trash2, Calendar, MapPin, Loader2, Link as LinkIcon, Save, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -105,7 +105,7 @@ export function EventEditor({ event }: EventEditorProps) {
         }
     }
 
-    const fetchGallery = async () => {
+    const fetchGallery = useCallback(async () => {
         if (!currentEvent.id) return
         setGalleryLoading(true)
         try {
@@ -115,7 +115,7 @@ export function EventEditor({ event }: EventEditorProps) {
             console.error('Erro ao buscar galeria:', error)
         }
         setGalleryLoading(false)
-    }
+    }, [currentEvent.id])
 
     const fetchPostCount = async () => {
         if (!currentEvent.id) return
@@ -145,7 +145,7 @@ export function EventEditor({ event }: EventEditorProps) {
             fetchVideos()
             fetchPostCount()
         }
-    }, [currentEvent.id])
+    }, [currentEvent.id, fetchGallery])
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
@@ -349,12 +349,7 @@ export function EventEditor({ event }: EventEditorProps) {
             )}
 
             {activeStep === 'gallery' && currentEvent.id && (
-                <EventGalleryPanel
-                    eventId={currentEvent.id}
-                    onGalleryChange={() => {
-                        fetchGallery()
-                    }}
-                />
+                <EventGalleryPanel eventId={currentEvent.id} onGalleryChange={fetchGallery} />
             )}
 
             {activeStep === 'videos' && currentEvent.id && (
