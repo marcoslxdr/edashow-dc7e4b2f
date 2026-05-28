@@ -105,8 +105,8 @@ export async function getCuratedStockImages(count?: number) {
  */
 export async function saveImageToStorage(image: NormalizedImage, folder?: string) {
     try {
-        const url = await downloadAndSaveImage(image, folder)
-        return { url, error: null }
+        const { publicUrl } = await downloadAndSaveImage(image, folder)
+        return { url: publicUrl, error: null }
     } catch (error) {
         console.error('Save image error:', error)
         return {
@@ -178,8 +178,8 @@ export async function uploadImageFromUrl(
             downloadUrl: imageUrl
         }
 
-        const url = await downloadAndSaveImage(image, folder)
-        return { url, error: null }
+        const { publicUrl } = await downloadAndSaveImage(image, folder)
+        return { url: publicUrl, error: null }
     } catch (error) {
         console.error('Upload error:', error)
         return {
@@ -293,8 +293,8 @@ export async function selectAICoverImage(
             downloadUrl: imageUrl
         }
 
-        const url = await downloadAndSaveImage(image, 'covers')
-        return { url, error: null }
+        const { publicUrl } = await downloadAndSaveImage(image, 'covers')
+        return { url: publicUrl, error: null }
     } catch (error) {
         console.error('Error selecting cover image:', error)
         return {

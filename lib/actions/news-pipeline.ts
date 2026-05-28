@@ -183,8 +183,8 @@ Return ONLY a short English search query (3-5 words) for finding a relevant stoc
 
   if (result.images.length === 0) return ''
 
-  const imageUrl = await downloadAndSaveImage(result.images[0], 'cowork')
-  return imageUrl
+  const { publicUrl } = await downloadAndSaveImage(result.images[0], 'cowork')
+  return publicUrl
 }
 
 // ─── Slug Generation ─────────────────────────────────────────────────

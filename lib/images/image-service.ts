@@ -149,10 +149,16 @@ export function getImageSearchSuggestions(topic: string): string[] {
 /**
  * Download image and save to Supabase storage
  */
+export interface SavedImageResult {
+    publicUrl: string
+    storagePath: string
+}
+
 export async function downloadAndSaveImage(
     image: NormalizedImage,
-    folder: string = 'posts'
-): Promise<string> {
+    folder: string = 'posts',
+    filename?: string
+): Promise<SavedImageResult> {
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -170,12 +176,13 @@ export async function downloadAndSaveImage(
 
     // Generate filename
     const extension = image.downloadUrl.match(/\.(jpg|jpeg|png|webp)/i)?.[1] || 'jpg'
-    const filename = `${folder}/${Date.now()}-${image.id.replace(/[^a-z0-9]/gi, '-')}.${extension}`
+    const finalName = filename ?? `${Date.now()}-${image.id.replace(/[^a-z0-9]/gi, '-')}.${extension}`
+    const storagePath = `${folder}/${finalName}`
 
     // Upload to Supabase storage
     const { data, error } = await supabase.storage
         .from(process.env.SUPABASE_BUCKET || 'media')
-        .upload(filename, buffer, {
+        .upload(storagePath, buffer, {
             contentType: blob.type || 'image/jpeg',
             upsert: false
         })
@@ -195,7 +202,7 @@ export async function downloadAndSaveImage(
         console.log('Unsplash download tracked for:', image.id)
     }
 
-    return publicUrl.publicUrl
+    return { publicUrl: publicUrl.publicUrl, storagePath: data.path }
 }
 
 /**
