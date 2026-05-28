@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchImages, downloadAndSaveImage } from './image-service'
 import {
+  IMAGE_BANK_MIN_PER_CATEGORY,
   IMAGE_BANK_TARGET_PER_CATEGORY,
   IMAGE_BANK_STORAGE_PREFIX,
   type ImageBankCategoryRow,
