@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { generateAIPost } from '@/lib/actions/ai-posts'
 import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
+import { pickImageForKeyword } from '@/lib/images/image-bank-picker'
 import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
 
@@ -105,27 +106,23 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
     let coverImageUrl = ''
     let imageSource = 'none'
 
-    // Try AI image generation first
-    console.log(`[DAILY] Generating cover image with AI...`)
+    // 1) Local image bank
+    console.log(`[DAILY] Trying image bank for keyword: "${keyword}"`)
     try {
-      const geminiResult = await generateAICoverImage({
-        title: post.title,
-        content: post.content,
-      })
-      if (geminiResult.url && !geminiResult.error) {
-        coverImageUrl = geminiResult.url
-        imageSource = 'gemini'
-        console.log(`[DAILY] AI image generated successfully`)
-      } else {
-        console.log(`[DAILY] AI image generation returned error: ${geminiResult.error}`)
+      const bankPick = await pickImageForKeyword(keyword)
+      if (bankPick?.publicUrl) {
+        coverImageUrl = bankPick.publicUrl
+        imageSource = 'image-bank'
+        console.log(`[DAILY] Image bank: ${bankPick.categorySlug} (${bankPick.provider})`)
       }
-    } catch (e: any) {
-      console.log(`[DAILY] Gemini image failed for "${keyword}": ${e?.message || e}, trying Pexels`)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.log(`[DAILY] Image bank failed: ${msg}`)
     }
 
-    // Fallback to Pexels
+    // 2) Live stock (Pexels/Unsplash)
     if (!coverImageUrl) {
-      console.log(`[DAILY] Falling back to Pexels...`)
+      console.log(`[DAILY] Falling back to live stock...`)
       try {
         const imageResult = await getAICoverSuggestions({
           title: post.title,
@@ -139,16 +136,32 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
           )
           if (saved.url) {
             coverImageUrl = saved.url
-            imageSource = 'pexels'
-            console.log(`[DAILY] Pexels image saved successfully`)
-          } else {
-            console.log(`[DAILY] Failed to save Pexels image: ${saved.error}`)
+            imageSource = imageResult.images[0].source || 'stock'
+            console.log(`[DAILY] Stock image saved`)
           }
-        } else {
-          console.log(`[DAILY] No images found on Pexels`)
         }
-      } catch (e: any) {
-        console.log(`[DAILY] Pexels image failed for "${keyword}": ${e?.message || e}`)
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.log(`[DAILY] Stock failed: ${msg}`)
+      }
+    }
+
+    // 3) Gemini last
+    if (!coverImageUrl) {
+      console.log(`[DAILY] Last resort: Gemini cover...`)
+      try {
+        const geminiResult = await generateAICoverImage({
+          title: post.title,
+          content: post.content,
+        })
+        if (geminiResult.url && !geminiResult.error) {
+          coverImageUrl = geminiResult.url
+          imageSource = 'gemini'
+          console.log(`[DAILY] Gemini cover generated`)
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.log(`[DAILY] Gemini failed: ${msg}`)
       }
     }
 
