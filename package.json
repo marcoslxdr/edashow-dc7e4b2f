@@ -10,6 +10,7 @@
     "seed:posts": "ts-node --esm scripts/seed-example-posts.ts",
     "check:env": "tsx scripts/check-env.ts",
     "test:db": "tsx scripts/test-db.ts",
+    "test:image-bank": "tsx --test lib/images/__tests__/keyword-to-visual-category.test.ts lib/images/__tests__/image-bank-eligibility.test.ts",
     "export:mongodb": "tsx scripts/export-mongodb.ts",
     "import:postgres": "tsx scripts/import-to-postgres.ts",
     "migrate:images": "tsx scripts/migrate-to-supabase.ts",
