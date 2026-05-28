@@ -67,6 +67,12 @@ export async function seedImageBank(options: SeedImageBankOptions = {}): Promise
       continue
     }
 
+    // Spec: only refill when below operational minimum (12), up to target (15)
+    if (currentCount >= IMAGE_BANK_MIN_PER_CATEGORY) {
+      results.push(result)
+      continue
+    }
+
     const needed = IMAGE_BANK_TARGET_PER_CATEGORY - currentCount
     const queries = Array.isArray(cat.search_queries) ? cat.search_queries : []
 
