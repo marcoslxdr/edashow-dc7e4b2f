@@ -23,6 +23,29 @@ const eventExampleImages = [
   "/odont-award-ceremony.jpg",
 ]
 
+function parseEventDate(raw: string | null | undefined): Date | null {
+  if (!raw) return null
+  const date = new Date(raw)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatEventSchedule(event: {
+  event_date?: string | null
+  date?: string | null
+  end_date?: string | null
+  endDate?: string | null
+}): string {
+  const start = parseEventDate(event.event_date ?? event.date)
+  if (!start) return "Data a confirmar"
+
+  let label = format(start, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
+  const end = parseEventDate(event.end_date ?? event.endDate)
+  if (end) {
+    label += ` - ${format(end, "dd/MM/yyyy", { locale: ptBR })}`
+  }
+  return label
+}
+
 // Função para garantir que eventos sempre tenham uma imagem de exemplo
 function ensureEventImage(event: any, index: number): any {
   if (!event.cover_image_url && !event.image_url) {
@@ -95,10 +118,11 @@ export function Events({ initialEvents = [] }: EventsProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-8">
           {events.map((event: any, index: number) => {
-            const eventDate = new Date(event.event_date || event.date)
-            const isValidDate = !isNaN(eventDate.getTime())
-            const day = isValidDate ? format(eventDate, 'dd') : '??'
-            const month = isValidDate ? format(eventDate, 'MMM', { locale: ptBR }).toUpperCase() : '???'
+            const eventDate = parseEventDate(event.event_date ?? event.date)
+            const day = eventDate ? format(eventDate, "dd") : "??"
+            const month = eventDate
+              ? format(eventDate, "MMM", { locale: ptBR }).toUpperCase()
+              : "???"
 
             const eventWithImage = ensureEventImage(event, index)
             const imageUrl = eventWithImage.image_url
@@ -151,8 +175,7 @@ export function Events({ initialEvents = [] }: EventsProps) {
                             <Calendar className="w-3.5 h-3.5" />
                           </div>
                           <span className="font-medium text-sm">
-                            {format(eventDate, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                            {event.endDate && ` - ${format(new Date(event.endDate), 'dd/MM/yyyy', { locale: ptBR })}`}
+                            {formatEventSchedule(event)}
                           </span>
                         </div>
                         {event.location && (
