@@ -4,6 +4,7 @@ import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from 
 import { pickImageForKeyword } from '@/lib/images/image-bank-picker'
 import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
+import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -235,6 +236,14 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!isPostGenerationEnabled()) {
+    console.log('[DAILY] Post generation disabled — skipping run')
+    return NextResponse.json(
+      { success: false, disabled: true, message: POST_GENERATION_DISABLED_MESSAGE },
+      { status: 503 }
+    )
   }
 
   const count = 5

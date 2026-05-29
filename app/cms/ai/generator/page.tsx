@@ -12,6 +12,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { Switch } from '@/components/ui/switch'
+import { PostGenerationDisabled } from '@/components/cms/ia/PostGenerationDisabled'
+import { isPostGenerationEnabled } from '@/lib/feature-flags'
+
+const postGenerationEnabled = isPostGenerationEnabled()
 
 export default function PostGeneratorPage() {
     const router = useRouter()
@@ -132,6 +136,14 @@ export default function PostGeneratorPage() {
                 variant: "destructive"
             })
         }
+    }
+
+    if (!postGenerationEnabled) {
+        return (
+            <div className="p-8 max-w-5xl mx-auto">
+                <PostGenerationDisabled />
+            </div>
+        )
     }
 
     return (

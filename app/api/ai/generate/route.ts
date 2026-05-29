@@ -1,9 +1,17 @@
 import { NextResponse } from 'next/server'
 import { generatePost, logGeneration } from '@/lib/ai/content-generator'
 import { checkAIConfiguration } from '@/lib/actions/ai-posts'
+import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
 
 export async function POST(req: Request) {
     try {
+        if (!isPostGenerationEnabled()) {
+            return NextResponse.json(
+                { error: POST_GENERATION_DISABLED_MESSAGE, disabled: true },
+                { status: 503 }
+            )
+        }
+
         const { configured } = await checkAIConfiguration()
         if (!configured) {
             return NextResponse.json(

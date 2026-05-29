@@ -2,13 +2,13 @@ name: Cowork News Pipeline
 
 on:
   schedule:
-    # 11:00 UTC = 08:00 BRT (Brasilia)
+    # 11:00 UTC = 08:00 BRT — só roda se vars.ENABLE_POST_GENERATION=true
     - cron: '0 11 * * *'
   workflow_dispatch:
-    # Permite execucao manual pelo GitHub Actions UI
 
 jobs:
   generate-news:
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_POST_GENERATION == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

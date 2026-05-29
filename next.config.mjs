@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    NEXT_PUBLIC_ENABLE_POST_GENERATION: process.env.ENABLE_POST_GENERATION ?? 'false',
+  },
+
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

@@ -10,6 +10,7 @@ import { searchImages, downloadAndSaveImage } from '@/lib/images/image-service'
 import { savePost } from '@/lib/actions/cms-posts'
 import { notifyOwner } from '@/lib/evolution/client'
 import { getEditorialYear, getEditorialYearPromptBlock } from '@/lib/ai/editorial-year'
+import { assertPostGenerationEnabled } from '@/lib/feature-flags'
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -253,6 +254,8 @@ async function resolveSourceUrl(googleNewsUrl: string, title: string): Promise<s
 export async function runNewsPipeline(
   config: NewsPipelineConfig = {}
 ): Promise<{ posts: NewsPipelineResult[]; whatsappMessage: string }> {
+  assertPostGenerationEnabled()
+
   const topic = config.topic || 'saude suplementar'
   const count = config.count || 5
   const siteUrl = config.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'https://edashow.com.br'

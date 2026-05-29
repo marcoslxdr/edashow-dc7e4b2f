@@ -20,6 +20,7 @@ import { categorizeContent, suggestTags } from '@/lib/ai/categorizer'
 import { analyzeSEO, optimizeContent, generateOptimizedMeta } from '@/lib/ai/seo-optimizer'
 import { rewriteContent } from '@/lib/ai/content-generator'
 import { openrouter } from '@/lib/ai/openrouter'
+import { assertPostGenerationEnabled } from '@/lib/feature-flags'
 
 // Types
 export interface GeneratePostConfig {
@@ -68,6 +69,8 @@ export async function checkAIConfiguration(): Promise<{
  * Generate a complete post with AI
  */
 export async function generateAIPost(config: GeneratePostConfig): Promise<AIGeneratedPost> {
+    assertPostGenerationEnabled()
+
     if (!openrouter.isConfigured()) {
         throw new Error('OpenRouter API não configurada. Adicione OPENROUTER_API_KEY ao .env')
     }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { runNewsPipeline } from '@/lib/actions/news-pipeline'
+import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
 
 export const maxDuration = 300 // 5 minutos
 export const dynamic = 'force-dynamic'
@@ -9,6 +10,14 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!isPostGenerationEnabled()) {
+    console.log('[CRON:COWORK] Post generation disabled — skipping run')
+    return NextResponse.json(
+      { success: false, disabled: true, message: POST_GENERATION_DISABLED_MESSAGE },
+      { status: 503 }
+    )
   }
 
   try {

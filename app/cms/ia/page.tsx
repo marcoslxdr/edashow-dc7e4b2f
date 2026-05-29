@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils'
 import { GeneratePostTab } from '@/components/cms/ia/GeneratePostTab'
 import { BatchGenerateTab } from '@/components/cms/ia/BatchGenerateTab'
 import { KeywordsTab } from '@/components/cms/ia/KeywordsTab'
+import { PostGenerationDisabled } from '@/components/cms/ia/PostGenerationDisabled'
+import { isPostGenerationEnabled } from '@/lib/feature-flags'
+
+const postGenerationEnabled = isPostGenerationEnabled()
 
 type TabId = 'gerar' | 'lote' | 'palavras-chave'
 
@@ -32,7 +36,7 @@ export default function IAPage() {
         if (tabFromUrl && tabs.find(t => t.id === tabFromUrl)) {
             return tabFromUrl
         }
-        return 'gerar'
+        return postGenerationEnabled ? 'gerar' : 'palavras-chave'
     })
 
     const handleTabChange = (tabId: TabId) => {
@@ -46,7 +50,14 @@ export default function IAPage() {
         }
     }, [tabFromUrl, activeTab])
 
-    const ActiveComponent = tabs.find(t => t.id === activeTab)?.component || GeneratePostTab
+    const generationTabs: TabId[] = ['gerar', 'lote']
+    const visibleTabs = postGenerationEnabled
+        ? tabs
+        : tabs.filter((tab) => !generationTabs.includes(tab.id))
+
+    const ActiveComponent = visibleTabs.find(t => t.id === activeTab)?.component || KeywordsTab
+    const showGenerationDisabled =
+        !postGenerationEnabled && generationTabs.includes(activeTab)
 
     return (
         <div className="h-full flex flex-col bg-gray-50">
@@ -63,7 +74,7 @@ export default function IAPage() {
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        {tabs.map((tab) => {
+                        {visibleTabs.map((tab) => {
                             const Icon = tab.icon
                             const isActive = activeTab === tab.id
                             return (
@@ -93,7 +104,7 @@ export default function IAPage() {
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
                 <div className="p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <ActiveComponent />
+                    {showGenerationDisabled ? <PostGenerationDisabled /> : <ActiveComponent />}
                 </div>
             </div>
         </div>

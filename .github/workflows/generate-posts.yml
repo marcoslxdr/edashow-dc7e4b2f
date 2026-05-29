@@ -2,13 +2,13 @@ name: Generate Daily Posts
 
 on:
   schedule:
-    # 12:00 UTC = 09:00 BRT (Brasília)
+    # 12:00 UTC = 09:00 BRT (Brasília) — só roda se vars.ENABLE_POST_GENERATION=true
     - cron: '0 12 * * *'
   workflow_dispatch:
-    # Permite execução manual pelo GitHub Actions UI
 
 jobs:
   generate:
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_POST_GENERATION == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Validate secrets

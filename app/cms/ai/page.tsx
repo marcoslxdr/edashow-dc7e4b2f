@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { Sparkles, RefreshCw, Wand2, Newspaper, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { isPostGenerationEnabled } from '@/lib/feature-flags'
+
+const postGenerationEnabled = isPostGenerationEnabled()
 
 export default function AIDashboardPage() {
   return (
@@ -31,12 +34,18 @@ export default function AIDashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Link href="/cms/ai/generator">
-              <Button className="w-full bg-orange-500 hover:bg-orange-600">
-                Começar Geração
-                <ArrowRight className="ml-2 w-4 h-4" />
+            {postGenerationEnabled ? (
+              <Link href="/cms/ai/generator">
+                <Button className="w-full bg-orange-500 hover:bg-orange-600">
+                  Começar Geração
+                  <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </Link>
+            ) : (
+              <Button className="w-full" disabled variant="secondary">
+                Geração temporariamente desabilitada
               </Button>
-            </Link>
+            )}
           </CardContent>
         </Card>
 

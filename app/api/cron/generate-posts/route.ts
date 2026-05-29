@@ -4,6 +4,7 @@ import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from 
 import { savePost } from '@/lib/actions/cms-posts'
 import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
+import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
 
 export const maxDuration = 120
 export const dynamic = 'force-dynamic'
@@ -13,6 +14,14 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (!isPostGenerationEnabled()) {
+    console.log('[CRON] Post generation disabled — skipping run')
+    return NextResponse.json(
+      { success: false, disabled: true, message: POST_GENERATION_DISABLED_MESSAGE },
+      { status: 503 }
+    )
   }
 
   // Accept keyword from body or select random
