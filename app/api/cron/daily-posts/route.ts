@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { generateAIPost } from '@/lib/actions/ai-posts'
-import { generateAICoverImage, getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
+import { getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
 import { pickImageForKeyword } from '@/lib/images/image-bank-picker'
 import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
 import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
-import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
+import { isDailyPostsEnabled } from '@/lib/feature-flags'
 
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
@@ -92,7 +92,7 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
 async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<SavedPost | null> {
   console.log(`[DAILY] Generating post for keyword: "${keyword}"`)
   console.log(`[DAILY] Post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
-  console.log(`[DAILY] Image model: ${process.env.OPENROUTER_IMAGE_MODEL || 'default'}`)
+  console.log(`[DAILY] Cover sources: image-bank → stock (pexels/unsplash)`)
 
   try {
     const post = await generateAIPost({
@@ -133,7 +133,7 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
         if (imageResult.images.length > 0) {
           const saved = await selectAICoverImage(
             imageResult.images[0].url,
-            imageResult.images[0].source as 'pexels' | 'unsplash' | 'gemini'
+            imageResult.images[0].source as 'pexels' | 'unsplash'
           )
           if (saved.url) {
             coverImageUrl = saved.url
@@ -144,25 +144,6 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
         console.log(`[DAILY] Stock failed: ${msg}`)
-      }
-    }
-
-    // 3) Gemini last
-    if (!coverImageUrl) {
-      console.log(`[DAILY] Last resort: Gemini cover...`)
-      try {
-        const geminiResult = await generateAICoverImage({
-          title: post.title,
-          content: post.content,
-        })
-        if (geminiResult.url && !geminiResult.error) {
-          coverImageUrl = geminiResult.url
-          imageSource = 'gemini'
-          console.log(`[DAILY] Gemini cover generated`)
-        }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
-        console.log(`[DAILY] Gemini failed: ${msg}`)
       }
     }
 
@@ -238,10 +219,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  if (!isPostGenerationEnabled()) {
-    console.log('[DAILY] Post generation disabled — skipping run')
+  if (!isDailyPostsEnabled()) {
+    console.log('[DAILY] Daily posts disabled — skipping run')
     return NextResponse.json(
-      { success: false, disabled: true, message: POST_GENERATION_DISABLED_MESSAGE },
+      {
+        success: false,
+        disabled: true,
+        message:
+          'O cron daily-posts está desabilitado. Defina ENABLE_DAILY_POSTS=true (ou ENABLE_POST_GENERATION=true) para reativar.',
+      },
       { status: 503 }
     )
   }
