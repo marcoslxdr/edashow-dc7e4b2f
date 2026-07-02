@@ -115,7 +115,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'O campo "content" é obrigatório.' }, { status: 400 })
     }
 
-    const postStatus = ['draft', 'published', 'archived'].includes(status) ? status : 'draft'
+    const postStatus = ['draft', 'published', 'archived', 'cold'].includes(status) ? status : 'draft'
     const postSlug = slug ? String(slug).trim() : generateSlug(title.trim())
 
     if (!postSlug) {

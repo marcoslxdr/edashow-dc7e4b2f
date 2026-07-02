@@ -3,6 +3,23 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+async function ensureUniqueSlug(
+    supabase: Awaited<ReturnType<typeof createAdminClient>>,
+    slug: string
+): Promise<string> {
+    let candidate = slug
+    let suffix = 2
+    while (true) {
+        const { data } = await supabase
+            .from('posts')
+            .select('id')
+            .eq('slug', candidate)
+            .maybeSingle()
+        if (!data) return candidate
+        candidate = `${slug}-${suffix++}`
+    }
+}
+
 export async function getPost(id: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -58,7 +75,7 @@ export async function savePost(data: any) {
     }
 
     // Ensure status is valid
-    if (normalizedData.status && !['draft', 'published', 'archived'].includes(normalizedData.status)) {
+    if (normalizedData.status && !['draft', 'published', 'archived', 'cold'].includes(normalizedData.status)) {
         normalizedData.status = 'draft'
     }
 
@@ -76,6 +93,10 @@ export async function savePost(data: any) {
     // Ensure required fields for new posts
     if ((id === 'new' || !id) && !normalizedData.slug) {
         throw new Error('Slug é obrigatório para criar um novo post')
+    }
+
+    if ((id === 'new' || !id) && normalizedData.slug) {
+        normalizedData.slug = await ensureUniqueSlug(supabase, normalizedData.slug)
     }
 
     let result

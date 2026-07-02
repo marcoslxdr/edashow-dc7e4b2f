@@ -1,9 +1,7 @@
 name: Cowork News Pipeline
 
+# Desativado no schedule — use workflow_dispatch para notícias sob demanda
 on:
-  schedule:
-    # 11:00 UTC = 08:00 BRT — só roda se vars.ENABLE_POST_GENERATION=true
-    - cron: '0 11 * * *'
   workflow_dispatch:
 
 jobs:

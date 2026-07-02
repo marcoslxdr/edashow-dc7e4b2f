@@ -1,9 +1,7 @@
 name: Generate Daily Posts
 
+# Desativado: pipeline canônico é o Vercel Cron /api/cron/daily-posts
 on:
-  schedule:
-    # 12:00 UTC = 09:00 BRT (Brasília) — só roda se vars.ENABLE_POST_GENERATION=true
-    - cron: '0 12 * * *'
   workflow_dispatch:
 
 jobs:

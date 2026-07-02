@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { generateAIPost } from '@/lib/actions/ai-posts'
 import { getAICoverSuggestions, selectAICoverImage } from '@/lib/actions/ai-images'
+import { savePost } from '@/lib/actions/cms-posts'
 import { pickImageForKeyword } from '@/lib/images/image-bank-picker'
 import { getProductionAdditionalInstructions } from '@/lib/ai/editorial-year'
-import { selectRandomKeywords } from '@/lib/constants/health-insurance-keywords'
+import {
+  getDailyKeywordCount,
+  selectKeywordsForDailyRun,
+} from '@/lib/post-generation/keywords'
+import { logPostGeneration } from '@/lib/post-generation/log'
 import { isDailyPostsEnabled } from '@/lib/feature-flags'
 
 export const maxDuration = 300
@@ -14,8 +19,10 @@ const ADDITIONAL_INSTRUCTIONS = getProductionAdditionalInstructions()
 interface SavedPost {
   id: string
   title: string
+  keyword: string
   hasImage: boolean
   imageSource: string
+  durationMs: number
 }
 
 interface FailedPost {
@@ -34,12 +41,11 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
     return { sent: 0, skipped: posts.length }
   }
 
-  const numbers = numbersRaw.split(',').map(n => n.trim()).filter(Boolean)
+  const numbers = numbersRaw.split(',').map((n) => n.trim()).filter(Boolean)
   if (numbers.length === 0) return { sent: 0, skipped: posts.length }
 
-  // SEPARA: posts com imagem vs sem imagem
-  const postsWithImage = posts.filter(p => p.hasImage)
-  const postsWithoutImage = posts.filter(p => !p.hasImage)
+  const postsWithImage = posts.filter((p) => p.hasImage)
+  const postsWithoutImage = posts.filter((p) => !p.hasImage)
 
   if (postsWithImage.length === 0) {
     console.log('[DAILY] Nenhum post com imagem — nada será enviado no WhatsApp')
@@ -51,11 +57,12 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
     return `${emojis[i]} ${p.title}\n🔗 https://edashow.com.br/preview/${p.id}`
   }).join('\n\n')
 
-  const skippedText = postsWithoutImage.length > 0
-    ? `\n\n⚠️ _${postsWithoutImage.length} post(s) gerado(s) mas NÃO enviado(s) por falta de imagem de capa_`
-    : ''
+  const skippedText =
+    postsWithoutImage.length > 0
+      ? `\n\n⚠️ _${postsWithoutImage.length} post(s) gerado(s) mas NÃO enviado(s) por falta de imagem de capa_`
+      : ''
 
-  const message = `📰 *${postsWithImage.length} Rascunho(s) Publicado(s) — Planos de Saúde*\n_EDA Show | ${date}_\n\n${lines}${skippedText}\n\n📝 _Posts como rascunho — revisar antes de publicar_`
+  const message = `📰 *${postsWithImage.length} Rascunho(s) — Planos de Saúde*\n_EDA Show | ${date}_\n\n${lines}${skippedText}\n\n📝 _Revisar antes de publicar_`
 
   let totalSent = 0
   for (const number of numbers) {
@@ -63,7 +70,7 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
       const response = await fetch(`${evoUrl}/message/sendText/${instance}`, {
         method: 'POST',
         headers: {
-          'apikey': evoKey,
+          apikey: evoKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ number, text: message }),
@@ -89,10 +96,53 @@ async function sendWhatsAppReport(posts: SavedPost[], date: string) {
   }
 }
 
+async function pickCoverImage(
+  keyword: string,
+  title: string,
+  content: string
+): Promise<{ url: string; source: string }> {
+  try {
+    const bankPick = await pickImageForKeyword(keyword)
+    if (bankPick?.publicUrl) {
+      console.log(`[DAILY] Image bank: ${bankPick.categorySlug} (${bankPick.provider})`)
+      return { url: bankPick.publicUrl, source: 'image-bank' }
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`[DAILY] Image bank failed: ${msg}`)
+  }
+
+  console.log(`[DAILY] Falling back to live stock...`)
+  try {
+    const imageResult = await getAICoverSuggestions({ title, content, count: 1 })
+    if (imageResult.images.length > 0) {
+      const img = imageResult.images[0]
+      const saved = await selectAICoverImage(
+        img.url,
+        img.source as 'pexels' | 'unsplash'
+      )
+      if (saved.url) {
+        return { url: saved.url, source: img.source || 'stock' }
+      }
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.log(`[DAILY] Stock failed: ${msg}`)
+  }
+
+  return { url: '', source: 'none' }
+}
+
 async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<SavedPost | null> {
-  console.log(`[DAILY] Generating post for keyword: "${keyword}"`)
-  console.log(`[DAILY] Post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
-  console.log(`[DAILY] Cover sources: image-bank → stock (pexels/unsplash)`)
+  const startedAt = Date.now()
+  console.log(
+    JSON.stringify({
+      event: 'daily_post_start',
+      keyword,
+      postModel: process.env.OPENROUTER_POST_MODEL || 'default',
+      coverOrder: ['image-bank', 'stock'],
+    })
+  )
 
   try {
     const post = await generateAIPost({
@@ -101,112 +151,65 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
       tone: 'professional',
       autoCategorize: true,
       additionalInstructions: ADDITIONAL_INSTRUCTIONS,
+      context: 'daily-cron',
     })
     console.log(`[DAILY] Post generated: "${post.title}"`)
 
-    let coverImageUrl = ''
-    let imageSource = 'none'
-
-    // 1) Local image bank
-    console.log(`[DAILY] Trying image bank for keyword: "${keyword}"`)
-    try {
-      const bankPick = await pickImageForKeyword(keyword)
-      if (bankPick?.publicUrl) {
-        coverImageUrl = bankPick.publicUrl
-        imageSource = 'image-bank'
-        console.log(`[DAILY] Image bank: ${bankPick.categorySlug} (${bankPick.provider})`)
-      }
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e)
-      console.log(`[DAILY] Image bank failed: ${msg}`)
-    }
-
-    // 2) Live stock (Pexels/Unsplash)
-    if (!coverImageUrl) {
-      console.log(`[DAILY] Falling back to live stock...`)
-      try {
-        const imageResult = await getAICoverSuggestions({
-          title: post.title,
-          content: post.content,
-          count: 1,
-        })
-        if (imageResult.images.length > 0) {
-          const saved = await selectAICoverImage(
-            imageResult.images[0].url,
-            imageResult.images[0].source as 'pexels' | 'unsplash'
-          )
-          if (saved.url) {
-            coverImageUrl = saved.url
-            imageSource = imageResult.images[0].source || 'stock'
-            console.log(`[DAILY] Stock image saved`)
-          }
-        }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e)
-        console.log(`[DAILY] Stock failed: ${msg}`)
-      }
-    }
+    const { url: coverImageUrl, source: imageSource } = await pickCoverImage(
+      keyword,
+      post.title,
+      post.content
+    )
 
     if (!coverImageUrl) {
-      console.log(`[DAILY] WARNING: No cover image generated for post "${post.title}" — será salvo mas NÃO enviado no WhatsApp`)
+      console.log(`[DAILY] WARNING: No cover for "${post.title}" — salvo sem WhatsApp`)
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !serviceKey) {
-      console.error('[DAILY] Supabase not configured')
-      return null
-    }
-
-    const slug = post.slug || post.title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '')
-
-    const saveRes = await fetch(`${supabaseUrl}/rest/v1/posts`, {
-      method: 'POST',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=representation',
-      },
-      body: JSON.stringify({
-        title: post.title,
-        slug,
-        excerpt: post.excerpt,
-        content: post.content,
-        cover_image_url: coverImageUrl || null,
-        tags: post.suggestedTags || [],
-        status: 'draft',
-        columnist_id: null,
-        featured_home: false,
-      }),
+    const savedPost = await savePost({
+      id: 'new',
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      content: post.content,
+      cover_image_url: coverImageUrl || null,
+      tags: post.suggestedTags || [],
+      status: 'draft',
+      category_id: post.categoryId || null,
+      columnist_id: null,
+      featured_home: false,
     })
 
-    if (!saveRes.ok) {
-      const errText = await saveRes.text()
-      console.error(`[DAILY] Save failed for "${keyword}":`, errText)
-      errors.push({ keyword, error: `Erro ao salvar: ${errText.substring(0, 200)}` })
-      return null
-    }
+    const durationMs = Date.now() - startedAt
 
-    const saved = await saveRes.json()
-    const savedPost = Array.isArray(saved) ? saved[0] : saved
+    await logPostGeneration({
+      keyword,
+      postId: savedPost?.id,
+      pipeline: 'keyword',
+      imageSource,
+      durationMs,
+    })
 
-    console.log(`[DAILY] Post saved: ID=${savedPost?.id}, hasImage=${!!coverImageUrl}, source=${imageSource}`)
+    console.log(
+      JSON.stringify({
+        event: 'daily_post_saved',
+        keyword,
+        postId: savedPost?.id,
+        hasImage: !!coverImageUrl,
+        imageSource,
+        durationMs,
+      })
+    )
 
     return {
       id: savedPost?.id,
       title: post.title,
+      keyword,
       hasImage: !!coverImageUrl,
       imageSource,
+      durationMs,
     }
-  } catch (error: any) {
-    const msg = error?.message || error?.toString() || 'Erro desconhecido'
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error)
     console.error(`[DAILY] Failed for keyword "${keyword}":`, msg)
     errors.push({ keyword, error: msg })
     return null
@@ -232,8 +235,9 @@ export async function GET(request: Request) {
     )
   }
 
-  const count = 5
-  const keywords = selectRandomKeywords(count)
+  const runStartedAt = Date.now()
+  const count = getDailyKeywordCount()
+  const keywords = await selectKeywordsForDailyRun(count)
   const savedPosts: SavedPost[] = []
   const errors: FailedPost[] = []
 
@@ -241,22 +245,28 @@ export async function GET(request: Request) {
 
   for (const keyword of keywords) {
     const post = await generateOnePost(keyword, errors)
-    if (post) {
-      savedPosts.push(post)
-      console.log(`[DAILY] Generated: ${post.title} (hasImage=${post.hasImage})`)
-    }
+    if (post) savedPosts.push(post)
   }
 
   const today = new Date().toLocaleDateString('pt-BR')
   const whatsappResult = await sendWhatsAppReport(savedPosts, today)
+  const runDurationMs = Date.now() - runStartedAt
 
-  return NextResponse.json({
-    success: true,
+  const summary = {
+    success: errors.length === 0,
     total: savedPosts.length,
+    requested: count,
     keywords,
     posts: savedPosts,
     whatsapp: whatsappResult,
     errors: errors.length > 0 ? errors : undefined,
+    runDurationMs,
     timestamp: new Date().toISOString(),
+  }
+
+  console.log(JSON.stringify({ event: 'daily_run_complete', ...summary }))
+
+  return NextResponse.json(summary, {
+    status: savedPosts.length === 0 ? 500 : 200,
   })
 }

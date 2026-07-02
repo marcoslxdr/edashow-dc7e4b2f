@@ -179,6 +179,20 @@ NEXT_PUBLIC_SERVER_URL=http://localhost:3000
 
 **Validation**: Use `npm run check:env` to verify configuration
 
+### Automated Post Generation (cron)
+
+**Canonical pipeline**: Vercel Cron `GET /api/cron/daily-posts` (`vercel.json`, 11:00 UTC). GitHub Actions `generate-posts` and `cowork-news` are manual-only (`workflow_dispatch`).
+
+**Feature flags**:
+- `ENABLE_DAILY_POSTS=true` — cron daily-posts (image-bank → Pexels/Unsplash)
+- `ENABLE_POST_GENERATION=true` — CMS `/cms/ia` and cowork-news; cron uses `context: 'daily-cron'` and only needs `ENABLE_DAILY_POSTS`
+
+**Tuning**: `DAILY_KEYWORD_COUNT` (default 3), `KEYWORD_COOLDOWN_DAYS` (default 60). Keyword history in `post_generation_log` (`lib/post-generation/`).
+
+**Covers**: `pickImageForKeyword()` → live stock fallback. Weekly refill: `/api/cron/seed-image-bank` (Sunday 06:00 UTC).
+
+**Production DB gotcha**: `posts.id` is `integer` and status uses enum `enum_posts_status` (includes `cold`). Migration `20260702_post_generation_log.sql` handles both legacy enum and baseline CHECK constraint.
+
 ### Migration History
 
 The codebase has migrated from **MongoDB → PostgreSQL (Supabase)**:
@@ -276,3 +290,5 @@ npm run diagnose:admin
 - `components/cms/PostEditor.tsx` - Content editing interface
 - `next.config.mjs` - Build configuration
 - `.env.example` - Environment variable template
+- `app/api/cron/daily-posts/route.ts` - Automated post generation cron
+- `lib/post-generation/` - Keyword cooldown and generation log

@@ -37,3 +37,23 @@ export function assertPostGenerationEnabled(): void {
     throw new Error(POST_GENERATION_DISABLED_MESSAGE)
   }
 }
+
+const DAILY_POSTS_DISABLED_MESSAGE =
+  'O cron daily-posts está desabilitado. Defina ENABLE_DAILY_POSTS=true (ou ENABLE_POST_GENERATION=true) para reativar.'
+
+/** Geração via cron daily-posts (não exige ENABLE_POST_GENERATION no CMS). */
+export function assertDailyPostsGenerationAllowed(): void {
+  if (!isDailyPostsEnabled()) {
+    throw new Error(DAILY_POSTS_DISABLED_MESSAGE)
+  }
+}
+
+export type AIGenerationContext = 'cms' | 'daily-cron'
+
+export function assertAIGenerationAllowed(context: AIGenerationContext = 'cms'): void {
+  if (context === 'daily-cron') {
+    assertDailyPostsGenerationAllowed()
+    return
+  }
+  assertPostGenerationEnabled()
+}
