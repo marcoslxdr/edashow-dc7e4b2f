@@ -19,7 +19,7 @@ import { suggestKeywords, analyzeTopic, generateContentIdeas } from '@/lib/ai/ke
 import { categorizeContent, suggestTags } from '@/lib/ai/categorizer'
 import { analyzeSEO, optimizeContent, generateOptimizedMeta } from '@/lib/ai/seo-optimizer'
 import { rewriteContent } from '@/lib/ai/content-generator'
-import { openrouter } from '@/lib/ai/openrouter'
+import { opencode } from '@/lib/ai/opencode'
 import { assertAIGenerationAllowed, type AIGenerationContext } from '@/lib/feature-flags'
 
 // Types
@@ -52,16 +52,16 @@ export interface AIGeneratedPost {
  */
 export async function checkAIConfiguration(): Promise<{
     configured: boolean
-    openrouter: boolean
+    opencode: boolean
     gemini: boolean
     pexels: boolean
     unsplash: boolean
 }> {
-    const hasOpenRouter = !!process.env.OPENROUTER_API_KEY
+    const hasOpenCode = !!process.env.OPENCODE_API_KEY
     return {
-        configured: hasOpenRouter,
-        openrouter: hasOpenRouter,
-        gemini: hasOpenRouter, // Gemini models accessed via OpenRouter
+        configured: hasOpenCode,
+        opencode: hasOpenCode,
+        gemini: hasOpenCode,
         pexels: !!process.env.PEXELS_API_KEY,
         unsplash: !!process.env.UNSPLASH_ACCESS_KEY
     }
@@ -73,8 +73,8 @@ export async function checkAIConfiguration(): Promise<{
 export async function generateAIPost(config: GeneratePostConfig): Promise<AIGeneratedPost> {
     assertAIGenerationAllowed(config.context ?? 'cms')
 
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada. Adicione OPENROUTER_API_KEY ao .env')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada. Adicione OPENCODE_API_KEY ao .env')
     }
 
     // Generate keywords if not provided
@@ -124,8 +124,8 @@ export async function generateAIPost(config: GeneratePostConfig): Promise<AIGene
  * Get keyword suggestions for a topic
  */
 export async function getKeywordSuggestions(topic: string, context?: string) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return suggestKeywords(topic, context)
@@ -135,8 +135,8 @@ export async function getKeywordSuggestions(topic: string, context?: string) {
  * Analyze a topic for content planning
  */
 export async function analyzeContentTopic(topic: string) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return analyzeTopic(topic)
@@ -146,8 +146,8 @@ export async function analyzeContentTopic(topic: string) {
  * Get content ideas based on topic
  */
 export async function getContentIdeas(topic: string, count?: number) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return generateContentIdeas(topic, count)
@@ -157,8 +157,8 @@ export async function getContentIdeas(topic: string, count?: number) {
  * Generate title options
  */
 export async function getAITitles(topic: string, keywords: string[], count?: number) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return generateTitles(topic, keywords, count)
@@ -168,8 +168,8 @@ export async function getAITitles(topic: string, keywords: string[], count?: num
  * Generate excerpt for existing content
  */
 export async function getAIExcerpt(content: string, maxLength?: number) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return generateExcerpt(content, maxLength)
@@ -179,8 +179,8 @@ export async function getAIExcerpt(content: string, maxLength?: number) {
  * Auto-categorize content
  */
 export async function autoCategorizeContent(title: string, content: string, excerpt?: string) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return categorizeContent(title, content, excerpt)
@@ -190,8 +190,8 @@ export async function autoCategorizeContent(title: string, content: string, exce
  * Get tag suggestions
  */
 export async function getAITags(title: string, content: string, existingTags?: string[]) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return suggestTags(title, content, existingTags)
@@ -206,8 +206,8 @@ export async function analyzPostSEO(
     targetKeywords: string[],
     excerpt?: string
 ) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return analyzeSEO(title, content, targetKeywords, excerpt)
@@ -217,8 +217,8 @@ export async function analyzPostSEO(
  * Optimize content for SEO
  */
 export async function optimizePostSEO(content: string, targetKeywords: string[], guidelines?: string) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return optimizeContent(content, targetKeywords, guidelines)
@@ -228,8 +228,8 @@ export async function optimizePostSEO(content: string, targetKeywords: string[],
  * Generate optimized meta tags
  */
 export async function getOptimizedMeta(title: string, content: string, targetKeywords: string[]) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return generateOptimizedMeta(title, content, targetKeywords)
@@ -242,8 +242,8 @@ export async function improvePostContent(
     content: string,
     type: 'clarity' | 'seo' | 'engagement' | 'grammar'
 ) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     return improveContent(content, type)
@@ -259,8 +259,8 @@ export async function rewriteFromSource(config: {
     tone?: 'professional' | 'casual' | 'formal' | 'friendly'
     guidelines?: string
 }) {
-    if (!openrouter.isConfigured()) {
-        throw new Error('OpenRouter API não configurada')
+    if (!opencode.isConfigured()) {
+        throw new Error('OpenCode API não configurada')
     }
 
     const result = await rewriteContent({
@@ -274,7 +274,7 @@ export async function rewriteFromSource(config: {
         'rewrite',
         { sourceUrl: config.sourceUrl, originalLength: config.sourceContent.length },
         { title: result.title, newLength: result.content.length },
-        'anthropic/claude-3.5-sonnet',
+        process.env.OPENCODE_POST_MODEL || 'kimi-k2.6',
         0,
         0
     )

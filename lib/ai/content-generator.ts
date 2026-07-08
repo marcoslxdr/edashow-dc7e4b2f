@@ -1,10 +1,10 @@
 /**
  * Content Generator Service
- * Uses OpenRouter (via custom client) to generate post content, titles, excerpts, and meta tags
+ * Uses OpenCode Go to generate post content, titles, excerpts, and meta tags
  */
 
 import { z } from 'zod'
-import { openrouter } from './openrouter'
+import { opencode, getPostModel } from './opencode'
 import { createAdminClient } from '@/lib/supabase/server'
 import { POST_GENERATION_PROMPT } from './prompts'
 import { ContextAssembler } from './context-engine/assembler'
@@ -64,7 +64,7 @@ function cleanJsonString(text: string): string {
 }
 
 function getModel(model?: string): string {
-    return model || process.env.OPENROUTER_POST_MODEL || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
+    return getPostModel(model)
 }
 
 function generateSlug(title: string): string {
@@ -85,7 +85,7 @@ function normalizeObject(obj: any): any {
 }
 
 async function generateJSONWithSchema<T>(schema: z.ZodType<T>, systemPrompt: string, userPrompt: string, model: string): Promise<{ object: T; usage: any }> {
-    const content = await openrouter.generate(userPrompt, {
+    const content = await opencode.generate(userPrompt, {
         systemPrompt: systemPrompt + '\nIMPORTANTE: Escapes caracteres especiais corretamente no JSON (quebras de linha como \\n, aspas como \\").',
         model,
         maxTokens: 8000,
@@ -171,14 +171,14 @@ export async function generateTitles(topic: string, keywords: string[], count: n
 }
 
 export async function generateExcerpt(content: string, maxLength: number = 160): Promise<string> {
-    return openrouter.generate(
+    return opencode.generate(
         `Resuma o texto abaixo em até ${maxLength} caracteres:\n\n${content.substring(0, 2000)}`,
         { systemPrompt: 'Responda apenas com o resumo.', model: getModel(), maxTokens: 300 }
     )
 }
 
 export async function generateMetaDescription(title: string, content: string, keywords: string[]): Promise<string> {
-    return openrouter.generate(
+    return opencode.generate(
         `Meta description SEO para "${title}". Keywords: ${keywords.join(', ')}.\nConteúdo: ${content.substring(0, 500)}`,
         { systemPrompt: 'Responda apenas com a meta description (max 160 chars).', model: getModel(), maxTokens: 200 }
     )
@@ -192,7 +192,7 @@ export async function improveContent(content: string, type: 'clarity' | 'seo' | 
         grammar: 'Corrija erros gramaticais.'
     }
 
-    return openrouter.generate(
+    return opencode.generate(
         `${instructions[type]}\n\nTexto: ${content}`,
         { model: getModel(), maxTokens: 4000 }
     )

@@ -4,10 +4,10 @@
  */
 
 import { z } from 'zod'
-import { openrouter } from './openrouter'
+import { opencode, getPostModel, getFastModel } from './opencode'
 
 function getModel(model?: string): string {
-    return model || process.env.OPENROUTER_DEFAULT_MODEL || 'google/gemini-2.5-flash'
+    return model ? getPostModel(model) : getFastModel()
 }
 
 export interface KeywordSuggestion {
@@ -44,7 +44,7 @@ Responda estritamente com um objeto JSON contendo:
 - "secondary": array de até 5 palavras-chave secundárias
 - "longTail": array de até 5 palavras-chave de cauda longa`
 
-    const content = await openrouter.generate(prompt, {
+    const content = await opencode.generate(prompt, {
         systemPrompt: "Você é um especialista em SEO. Responda estritamente com JSON.",
         model: getModel(),
         jsonMode: true,
@@ -83,7 +83,7 @@ export interface ContentIdea extends z.infer<typeof ContentIdeaSchema> {}
  * Analyze a topic for content strategy
  */
 export async function analyzeTopic(topic: string): Promise<TopicAnalysis> {
-    const content = await openrouter.generate(
+    const content = await opencode.generate(
         `Analise o seguinte tópico para estratégia de conteúdo: ${topic}
 
 Responda com JSON contendo:
@@ -115,7 +115,7 @@ Responda com JSON contendo:
   - "keywords": array de strings
   - "type": "article" | "guide" | "listicle" | "how-to" | "news"`
 
-    const content = await openrouter.generate(prompt, {
+    const content = await opencode.generate(prompt, {
         systemPrompt: "Você é um editor criativo.",
         model: getModel(),
         jsonMode: true,

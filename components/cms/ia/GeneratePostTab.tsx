@@ -132,7 +132,7 @@ export function GeneratePostTab() {
         try {
             const config = await checkAIConfiguration()
             if (!config.configured) {
-                setError('API de IA não configurada. Configure a OPENROUTER_API_KEY.')
+                setError('API de IA não configurada. Configure OPENCODE_API_KEY.')
                 return
             }
 

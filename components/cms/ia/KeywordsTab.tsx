@@ -62,7 +62,7 @@ export function KeywordsTab() {
         try {
             const config = await checkAIConfiguration()
             if (!config.configured) {
-                setError('API de IA no configurada. Adicione a OPENROUTER_API_KEY ao .env')
+                setError('API de IA não configurada. Adicione OPENCODE_API_KEY ao .env')
                 return
             }
             const suggestions = await getKeywordSuggestions(topicInput)

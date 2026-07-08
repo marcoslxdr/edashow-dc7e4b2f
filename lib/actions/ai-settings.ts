@@ -268,13 +268,12 @@ export async function deleteAIPrompt(id: string): Promise<{ success: boolean; er
  */
 export async function getAvailableModels(): Promise<Array<{ id: string; name: string; description: string }>> {
     return [
-        { id: 'z-ai/glm-4.7-flash', name: 'GLM-4.7-Flash', description: 'Rápido, econômico e multimodal' },
-        { id: 'anthropic/claude-3-haiku', name: 'Claude 3 Haiku', description: 'Rápido e econômico' },
-        { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Melhor equilíbrio qualidade/custo' },
-        { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus', description: 'Máxima qualidade' },
-        { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo', description: 'OpenAI mais recente' },
-        { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI otimizado' },
-        { id: 'google/gemini-pro', name: 'Gemini Pro', description: 'Google AI' }
+        { id: 'kimi-k2.6', name: 'Kimi K2.6', description: 'Melhor para posts longos em PT-BR' },
+        { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', description: 'Otimizado para conteúdo estruturado' },
+        { id: 'glm-5.2', name: 'GLM 5.2', description: 'Equilíbrio qualidade/custo' },
+        { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', description: 'Rápido e econômico' },
+        { id: 'mimo-v2.5', name: 'MiMo V2.5', description: 'Máximo volume, baixo custo' },
+        { id: 'glm-5.1', name: 'GLM 5.1', description: 'Alternativa GLM' },
     ]
 }
 

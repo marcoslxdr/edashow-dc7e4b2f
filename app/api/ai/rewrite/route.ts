@@ -33,7 +33,7 @@ export async function POST(req: Request) {
             'rewrite',
             { sourceUrl, length: sourceContent.length, tone },
             { title: result.title },
-            'anthropic/claude-3.5-sonnet',
+            process.env.OPENCODE_POST_MODEL || 'kimi-k2.6',
             0, // Token usage calculation requires extra logic with Vercel AI SDK
             0
         )

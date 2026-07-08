@@ -139,7 +139,7 @@ async function generateOnePost(keyword: string, errors: FailedPost[]): Promise<S
     JSON.stringify({
       event: 'daily_post_start',
       keyword,
-      postModel: process.env.OPENROUTER_POST_MODEL || 'default',
+      postModel: process.env.OPENCODE_POST_MODEL || 'kimi-k2.6',
       coverOrder: ['image-bank', 'stock'],
     })
   )

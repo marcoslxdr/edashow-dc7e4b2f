@@ -3,7 +3,7 @@
  * Automatically suggests categories and tags for content
  */
 
-import { openrouter, MODELS } from './openrouter'
+import { opencode, MODELS } from './opencode'
 import { createAdminClient } from '@/lib/supabase/server'
 
 export interface CategorizationResult {
@@ -64,13 +64,13 @@ Responda em JSON:
   "reasoning": "breve explicação da escolha"
 }`
 
-    const result = await openrouter.generateJSON<{
+    const result = await opencode.generateJSON<{
         category: string
         tags: string[]
         confidence: number
         reasoning: string
     }>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.3
     })
 
@@ -111,8 +111,8 @@ Requisitos:
 
 Responda em JSON: { "tags": ["tag1", "tag2", ...] }`
 
-    const result = await openrouter.generateJSON<{ tags: string[] }>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    const result = await opencode.generateJSON<{ tags: string[] }>(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.4
     })
 
@@ -140,8 +140,8 @@ Responda em JSON:
   "topics": ["temas principais abordados"]
 }`
 
-    return openrouter.generateJSON(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generateJSON(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.2
     })
 }
@@ -175,8 +175,8 @@ Responda em JSON:
   "confidence": 0.0 a 1.0
 }`
 
-    return openrouter.generateJSON(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generateJSON(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.2
     })
 }

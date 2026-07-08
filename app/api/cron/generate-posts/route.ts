@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   console.log(`[CRON] Starting post generation for keyword: "${keyword}"`)
-  console.log(`[CRON] Using post model: ${process.env.OPENROUTER_POST_MODEL || 'default'}`)
+  console.log(`[CRON] Using post model: ${process.env.OPENCODE_POST_MODEL || 'kimi-k2.6'}`)
   console.log(`[CRON] Using image model: ${process.env.OPENROUTER_IMAGE_MODEL || 'default'}`)
 
   try {

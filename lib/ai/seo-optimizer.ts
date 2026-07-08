@@ -3,7 +3,7 @@
  * Analyzes and optimizes content for search engine optimization
  */
 
-import { openrouter, MODELS } from './openrouter'
+import { opencode, MODELS } from './opencode'
 
 export interface SEOAnalysis {
     score: number
@@ -70,8 +70,8 @@ Responda em JSON:
   }
 }`
 
-    return openrouter.generateJSON<SEOAnalysis>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generateJSON<SEOAnalysis>(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.3
     })
 }
@@ -101,8 +101,8 @@ Faça:
 
 Retorne apenas o conteúdo otimizado em Markdown.`
 
-    return openrouter.generate(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generate(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.5,
         maxTokens: 4000
     })
@@ -137,8 +137,8 @@ Responda em JSON:
   "keywords": ["palavras-chave relevantes"]
 }`
 
-    return openrouter.generateJSON<OptimizedMeta>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generateJSON<OptimizedMeta>(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.5
     })
 }
@@ -178,10 +178,10 @@ Responda em JSON:
   ]
 }`
 
-    const result = await openrouter.generateJSON<{
+    const result = await opencode.generateJSON<{
         links: Array<{ anchor: string; targetSlug: string; reason: string }>
     }>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.4
     })
 
@@ -218,8 +218,8 @@ Responda em JSON:
   "mostSimilarIndex": índice do mais similar (ou null)
 }`
 
-    return openrouter.generateJSON(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+    return opencode.generateJSON(prompt, {
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.2
     })
 }
@@ -244,7 +244,7 @@ Requisitos:
 
 Responda apenas com o alt text.`
 
-    return openrouter.generate(prompt, {
+    return opencode.generate(prompt, {
         maxTokens: 50,
         temperature: 0.3
     })
@@ -273,10 +273,10 @@ Responda em JSON:
   ]
 }`
 
-    const result = await openrouter.generateJSON<{
+    const result = await opencode.generateJSON<{
         faq: Array<{ question: string; answer: string }>
     }>(prompt, {
-        model: MODELS.CLAUDE_HAIKU,
+        model: MODELS.DEEPSEEK_V4_FLASH,
         temperature: 0.5
     })
 
