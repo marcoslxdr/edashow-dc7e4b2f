@@ -5,6 +5,20 @@ import { getSupabasePublicKey } from '@/lib/supabase/env-keys'
 // Cookie name for remember-me preference
 const REMEMBER_ME_COOKIE = 'cms_remember_me'
 
+async function getUserRole(supabase: ReturnType<typeof createServerClient>, userId: string) {
+    const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single()
+
+    return roleData?.role
+}
+
+function isAllowedCmsRole(role: string | undefined): role is 'admin' | 'editor' {
+    return role === 'admin' || role === 'editor'
+}
+
 export async function middleware(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
         request,
@@ -24,13 +38,11 @@ export async function middleware(request: NextRequest) {
                         request,
                     })
 
-                    // Check remember-me preference for cookie settings
                     const rememberMe = request.cookies.get(REMEMBER_ME_COOKIE)?.value === 'true'
 
                     cookiesToSet.forEach(({ name, value, options }) =>
                         supabaseResponse.cookies.set(name, value, {
                             ...options,
-                            // If remember-me is false, don't set maxAge (session cookie)
                             ...(rememberMe ? {} : { maxAge: undefined }),
                         })
                     )
@@ -39,46 +51,43 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    // Refresh session - this is important to keep sessions alive
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
-    // Check if accessing CMS routes
-    const isCmsRoute = request.nextUrl.pathname.startsWith('/cms')
     const isLoginRoute = request.nextUrl.pathname === '/cms/login'
 
-    if (isCmsRoute && !isLoginRoute) {
-        if (!user) {
-            // User is not logged in, redirect to login
+    let user: { id: string } | null = null
+
+    try {
+        const { data } = await supabase.auth.getUser()
+        user = data.user
+    } catch (error) {
+        console.error('[middleware] Supabase auth check failed:', error)
+
+        if (!isLoginRoute) {
             const url = request.nextUrl.clone()
             url.pathname = '/cms/login'
             return NextResponse.redirect(url)
         }
 
-        // Verify user has admin/editor role
-        const { data: roleData } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id)
-            .single()
-
-        if (!roleData || (roleData.role !== 'admin' && roleData.role !== 'editor')) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/cms/login'
-            return NextResponse.redirect(url)
-        }
+        return supabaseResponse
     }
 
-    // If logged in user tries to access login page, redirect to dashboard
-    if (isLoginRoute && user) {
-        const { data: roleData } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id)
-            .single()
+    if (!isLoginRoute) {
+        if (!user) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/cms/login'
+            return NextResponse.redirect(url)
+        }
 
-        if (roleData && (roleData.role === 'admin' || roleData.role === 'editor')) {
+        const role = await getUserRole(supabase, user.id)
+
+        if (!isAllowedCmsRole(role)) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/cms/login'
+            return NextResponse.redirect(url)
+        }
+    } else if (user) {
+        const role = await getUserRole(supabase, user.id)
+
+        if (isAllowedCmsRole(role)) {
             const url = request.nextUrl.clone()
             url.pathname = '/cms/dashboard'
             return NextResponse.redirect(url)
@@ -89,15 +98,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico (favicon file)
-         * - public folder
-         * - api routes (these handle their own auth)
-         */
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api).*)',
-    ],
+    // Auth only on CMS routes — public pages must not call Supabase in Edge middleware
+    matcher: ['/cms/:path*'],
 }
