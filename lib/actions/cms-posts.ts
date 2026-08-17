@@ -293,9 +293,26 @@ export async function getPostForPreview(id: string) {
         .eq('id', id)
         .single()
 
+    // Relacionamentos opcionais podem divergir entre ambientes. Preserve o
+    // preview usando os campos do post quando a expansão falhar.
     if (error) {
-        console.error(`[getPostForPreview] Erro ao buscar post ${id}:`, error)
-        return null
+        const fallback = await supabase
+            .from('posts')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (fallback.error) {
+            console.error(`[getPostForPreview] Erro ao buscar post ${id}:`, error)
+            return null
+        }
+
+        return {
+            ...fallback.data,
+            featured_image: fallback.data.cover_image_url
+                ? { url: fallback.data.cover_image_url, alt_text: fallback.data.title || 'Imagem do post' }
+                : null,
+        }
     }
 
     if (!data) {
