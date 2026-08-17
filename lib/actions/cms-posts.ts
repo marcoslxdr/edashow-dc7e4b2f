@@ -281,7 +281,9 @@ export async function deleteMultiplePosts(ids: string[]) {
 
 export async function getPostForPreview(id: string) {
     await requireCmsRole()
-    const supabase = await createAdminClient()
+    // The preview is already protected by the CMS session; use the regular
+    // client so it works even when the service-role key is not configured.
+    const supabase = await createClient()
     const { data, error } = await supabase
         .from('posts')
         .select(`
