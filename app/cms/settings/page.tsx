@@ -39,15 +39,17 @@ export default function SettingsPage() {
         }
         return 'general'
     })
-    const [isAdmin, setIsAdmin] = useState(false)
+    const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
 
     useEffect(() => {
-        getCurrentUser().then((user) => setIsAdmin(user?.role === 'admin'))
+        getCurrentUser()
+            .then((user) => setIsAdmin(user?.role === 'admin'))
+            .catch(() => setIsAdmin(false))
     }, [])
 
     // A non-admin cannot remain on the hidden Users tab when loading a deep link.
     useEffect(() => {
-        if (!isAdmin && activeTab === 'users') {
+        if (isAdmin === false && activeTab === 'users') {
             setActiveTab('general')
             router.replace('/cms/settings?tab=general', { scroll: false })
         }
@@ -65,14 +67,14 @@ export default function SettingsPage() {
         if (
             tabFromUrl &&
             tabs.find(t => t.id === tabFromUrl) &&
-            !(tabFromUrl === 'users' && !isAdmin) &&
+            !(tabFromUrl === 'users' && isAdmin === false) &&
             tabFromUrl !== activeTab
         ) {
             setActiveTab(tabFromUrl)
         }
     }, [tabFromUrl, activeTab, isAdmin])
 
-    const visibleTabs = tabs.filter(tab => tab.id !== 'users' || isAdmin)
+    const visibleTabs = tabs.filter(tab => tab.id !== 'users' || isAdmin === true)
     const ActiveComponent = visibleTabs.find(t => t.id === activeTab)?.component || GeneralSettingsTab
 
     return (
