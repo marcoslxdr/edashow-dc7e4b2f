@@ -62,10 +62,15 @@ export default function SettingsPage() {
 
     // Sync with URL changes
     useEffect(() => {
-        if (tabFromUrl && tabs.find(t => t.id === tabFromUrl) && tabFromUrl !== activeTab) {
+        if (
+            tabFromUrl &&
+            tabs.find(t => t.id === tabFromUrl) &&
+            !(tabFromUrl === 'users' && !isAdmin) &&
+            tabFromUrl !== activeTab
+        ) {
             setActiveTab(tabFromUrl)
         }
-    }, [tabFromUrl, activeTab])
+    }, [tabFromUrl, activeTab, isAdmin])
 
     const visibleTabs = tabs.filter(tab => tab.id !== 'users' || isAdmin)
     const ActiveComponent = visibleTabs.find(t => t.id === activeTab)?.component || GeneralSettingsTab
