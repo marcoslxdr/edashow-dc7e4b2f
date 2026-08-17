@@ -1,8 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { requireCmsRole } from '@/lib/actions/cms-authz'
 
 export async function publishPostFromPreview(postId: string): Promise<{ success: boolean; slug?: string; error?: string }> {
+    await requireCmsRole()
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 

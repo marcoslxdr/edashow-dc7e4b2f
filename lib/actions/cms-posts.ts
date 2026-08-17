@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireCmsRole } from './cms-authz'
 
 async function ensureUniqueSlug(
     supabase: Awaited<ReturnType<typeof createAdminClient>>,
@@ -21,6 +22,7 @@ async function ensureUniqueSlug(
 }
 
 export async function getPost(id: string) {
+    await requireCmsRole()
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('posts')
@@ -33,6 +35,7 @@ export async function getPost(id: string) {
 }
 
 export async function savePost(data: any) {
+    await requireCmsRole()
     // Use admin client for CMS operations to bypass RLS
     const supabase = await createAdminClient()
     const { id, categories, columnists, ...postData } = data
@@ -148,6 +151,7 @@ export async function savePost(data: any) {
 }
 
 export async function autoSavePost(data: any) {
+    await requireCmsRole()
     // Use admin client for CMS operations to bypass RLS
     const supabase = await createAdminClient()
     const { id, categories, columnists, ...postData } = data
@@ -196,6 +200,7 @@ export async function autoSavePost(data: any) {
 
 
 export async function deletePost(id: string) {
+    await requireCmsRole()
     // Use admin client for CMS operations to bypass RLS
     const supabase = await createAdminClient()
 
@@ -235,6 +240,7 @@ export async function deletePost(id: string) {
 }
 
 export async function deleteMultiplePosts(ids: string[]) {
+    await requireCmsRole()
     // Use admin client for CMS operations to bypass RLS
     const supabase = await createAdminClient()
 
@@ -274,6 +280,7 @@ export async function deleteMultiplePosts(ids: string[]) {
 }
 
 export async function getPostForPreview(id: string) {
+    await requireCmsRole()
     const supabase = await createAdminClient()
     const { data, error } = await supabase
         .from('posts')
@@ -305,6 +312,7 @@ export async function getPostForPreview(id: string) {
 }
 
 export async function publishPost(id: string) {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Buscar post atual para verificar published_at

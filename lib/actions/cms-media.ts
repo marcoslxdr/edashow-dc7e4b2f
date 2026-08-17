@@ -3,8 +3,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { processImageWithSettings, getMimeType, getExtension } from '@/lib/images/image-optimizer'
+import { requireCmsRole } from './cms-authz'
 
 export async function getMedia() {
+    await requireCmsRole()
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('media')
@@ -16,9 +18,15 @@ export async function getMedia() {
 }
 
 export async function uploadMedia(formData: FormData) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const file = formData.get('file') as File
+
+    if (!file || !(file instanceof File)) throw new Error('Arquivo não informado')
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+    if (!allowedTypes.has(file.type)) throw new Error('Formato de imagem não permitido')
+    if (file.size > 10 * 1024 * 1024) throw new Error('Arquivo muito grande. Máximo de 10MB.')
 
     // Check if it's an image
     const isImage = file.type.startsWith('image/')
@@ -44,14 +52,14 @@ export async function uploadMedia(formData: FormData) {
                 finalSize = fileBuffer.length
 
                 // Generate new filename with correct extension
-                const baseName = file.name.replace(/\.[^.]+$/, '')
+                const baseName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_')
                 finalFilename = `${Date.now()}-${baseName}.${getExtension(optimized.format)}`
 
                 console.log(`Image optimized: ${file.name} (${file.size} bytes) -> ${finalFilename} (${finalSize} bytes)`)
             } else {
                 // Optimization disabled or failed, use original
                 fileBuffer = originalBuffer
-                finalFilename = `${Date.now()}-${file.name}`
+                finalFilename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`
                 finalMimeType = file.type
                 finalSize = file.size
             }
@@ -59,7 +67,7 @@ export async function uploadMedia(formData: FormData) {
             console.error('Error optimizing image:', error)
             // Fallback to original
             fileBuffer = originalBuffer
-            finalFilename = `${Date.now()}-${file.name}`
+            finalFilename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9_.-]/g, '_')}`
             finalMimeType = file.type
             finalSize = file.size
         }
@@ -110,6 +118,7 @@ export async function uploadMedia(formData: FormData) {
 
 
 export async function deleteMedia(id: string, filename: string) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 

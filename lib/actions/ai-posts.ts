@@ -21,6 +21,7 @@ import { analyzeSEO, optimizeContent, generateOptimizedMeta } from '@/lib/ai/seo
 import { rewriteContent } from '@/lib/ai/content-generator'
 import { opencode } from '@/lib/ai/opencode'
 import { assertAIGenerationAllowed, type AIGenerationContext } from '@/lib/feature-flags'
+import { requireCmsRole } from './cms-authz'
 
 // Types
 export interface GeneratePostConfig {
@@ -57,6 +58,7 @@ export async function checkAIConfiguration(): Promise<{
     pexels: boolean
     unsplash: boolean
 }> {
+    await requireCmsRole()
     const hasOpenCode = !!process.env.OPENCODE_API_KEY
     return {
         configured: hasOpenCode,
@@ -71,6 +73,7 @@ export async function checkAIConfiguration(): Promise<{
  * Generate a complete post with AI
  */
 export async function generateAIPost(config: GeneratePostConfig): Promise<AIGeneratedPost> {
+    await requireCmsRole()
     assertAIGenerationAllowed(config.context ?? 'cms')
 
     if (!opencode.isConfigured()) {
@@ -124,6 +127,7 @@ export async function generateAIPost(config: GeneratePostConfig): Promise<AIGene
  * Get keyword suggestions for a topic
  */
 export async function getKeywordSuggestions(topic: string, context?: string) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -135,6 +139,7 @@ export async function getKeywordSuggestions(topic: string, context?: string) {
  * Analyze a topic for content planning
  */
 export async function analyzeContentTopic(topic: string) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -146,6 +151,7 @@ export async function analyzeContentTopic(topic: string) {
  * Get content ideas based on topic
  */
 export async function getContentIdeas(topic: string, count?: number) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -157,6 +163,7 @@ export async function getContentIdeas(topic: string, count?: number) {
  * Generate title options
  */
 export async function getAITitles(topic: string, keywords: string[], count?: number) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -168,6 +175,7 @@ export async function getAITitles(topic: string, keywords: string[], count?: num
  * Generate excerpt for existing content
  */
 export async function getAIExcerpt(content: string, maxLength?: number) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -179,6 +187,7 @@ export async function getAIExcerpt(content: string, maxLength?: number) {
  * Auto-categorize content
  */
 export async function autoCategorizeContent(title: string, content: string, excerpt?: string) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -190,6 +199,7 @@ export async function autoCategorizeContent(title: string, content: string, exce
  * Get tag suggestions
  */
 export async function getAITags(title: string, content: string, existingTags?: string[]) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -206,6 +216,7 @@ export async function analyzPostSEO(
     targetKeywords: string[],
     excerpt?: string
 ) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -217,6 +228,7 @@ export async function analyzPostSEO(
  * Optimize content for SEO
  */
 export async function optimizePostSEO(content: string, targetKeywords: string[], guidelines?: string) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -228,6 +240,7 @@ export async function optimizePostSEO(content: string, targetKeywords: string[],
  * Generate optimized meta tags
  */
 export async function getOptimizedMeta(title: string, content: string, targetKeywords: string[]) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -242,6 +255,7 @@ export async function improvePostContent(
     content: string,
     type: 'clarity' | 'seo' | 'engagement' | 'grammar'
 ) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -259,6 +273,7 @@ export async function rewriteFromSource(config: {
     tone?: 'professional' | 'casual' | 'formal' | 'friendly'
     guidelines?: string
 }) {
+    await requireCmsRole()
     if (!opencode.isConfigured()) {
         throw new Error('OpenCode API não configurada')
     }
@@ -292,6 +307,7 @@ export async function rewriteFromSource(config: {
  * @deprecated Use API route /api/ai/fetch-url instead
  */
 export async function fetchUrlContent(url: string) {
+    await requireCmsRole()
     throw new Error('Use API route /api/ai/fetch-url instead')
 }
 
@@ -299,6 +315,7 @@ export async function fetchUrlContent(url: string) {
  * Schedule a post for publishing
  */
 export async function schedulePost(postId: string, scheduledFor: Date) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     // Check if already scheduled
@@ -338,6 +355,7 @@ export async function schedulePost(postId: string, scheduledFor: Date) {
  * Cancel scheduled publication
  */
 export async function cancelScheduledPost(postId: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -356,6 +374,7 @@ export async function cancelScheduledPost(postId: string) {
  * Get scheduled posts
  */
 export async function getScheduledPosts() {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -377,6 +396,7 @@ export async function getScheduledPosts() {
  * Get AI generation history
  */
 export async function getAIGenerationHistory(limit: number = 20) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -393,6 +413,7 @@ export async function getAIGenerationHistory(limit: number = 20) {
  * Get AI usage stats
  */
 export async function getAIUsageStats() {
+    await requireCmsRole()
     const supabase = await createClient()
 
     // Get stats for last 30 days

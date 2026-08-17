@@ -206,7 +206,7 @@ export function UnifiedMediumEditor({
             
             // Só atualiza se o conteúdo for realmente diferente para evitar loops
             if (currentHtml !== newHtml) {
-                editor.commands.setContent(newHtml, false)
+                editor.commands.setContent(newHtml, { emitUpdate: false })
             }
         }
     }, [editor, content])
@@ -289,7 +289,7 @@ export function UnifiedMediumEditor({
     const words = editor.storage.characterCount.words()
 
     return (
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen min-w-0 overflow-x-hidden bg-white">
             {/* Hidden file inputs */}
             <input
                 ref={fileInputRef}
@@ -308,7 +308,7 @@ export function UnifiedMediumEditor({
 
             {/* Top Action Bar */}
             <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100">
-                <div className="max-w-4xl mx-auto px-6 py-3 flex items-center justify-between">
+                <div className="max-w-4xl mx-auto min-w-0 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2">
                     {/* Left: Status */}
                     <div className="flex items-center gap-3">
                         {isSaving ? (
@@ -342,7 +342,7 @@ export function UnifiedMediumEditor({
                     </div>
 
                     {/* Right: Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center justify-end gap-2">
                         {/* Preview Toggle */}
                         <button
                             type="button"

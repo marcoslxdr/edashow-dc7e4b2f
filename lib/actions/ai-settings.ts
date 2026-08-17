@@ -7,6 +7,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireCmsRole, requireAdmin } from './cms-authz'
 
 // Types
 export interface PersonaConfig {
@@ -34,6 +35,7 @@ export interface AISetting {
  * Get all AI settings
  */
 export async function getAISettings(): Promise<Record<string, any>> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -63,6 +65,7 @@ export async function getAISettings(): Promise<Record<string, any>> {
  * Get a single AI setting
  */
 export async function getAISetting(key: string): Promise<any> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -88,6 +91,7 @@ export async function getAISetting(key: string): Promise<any> {
  * Update or create an AI setting
  */
 export async function updateAISetting(key: string, value: any): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     const supabase = await createClient()
 
     const settingValue = typeof value === 'string' ? value : JSON.stringify(value)
@@ -115,6 +119,7 @@ export async function updateAISetting(key: string, value: any): Promise<{ succes
  * Get persona configuration
  */
 export async function getPersonaConfig(): Promise<PersonaConfig> {
+    await requireCmsRole()
     const settings = await getAISettings()
 
     return {
@@ -129,6 +134,7 @@ export async function getPersonaConfig(): Promise<PersonaConfig> {
  * Update persona configuration
  */
 export async function updatePersonaConfig(config: Partial<PersonaConfig>): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     const updates = Object.entries(config)
     let lastError: string | undefined
 
@@ -150,6 +156,7 @@ export async function updatePersonaConfig(config: Partial<PersonaConfig>): Promi
  * Get AI prompts by category
  */
 export async function getAIPrompts(category?: string): Promise<AIPrompt[]> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     let query = supabase
@@ -175,6 +182,7 @@ export async function getAIPrompts(category?: string): Promise<AIPrompt[]> {
  * Get active prompt by category and name
  */
 export async function getActivePrompt(category: string, name: string): Promise<AIPrompt | null> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -196,6 +204,7 @@ export async function getActivePrompt(category: string, name: string): Promise<A
  * Save an AI prompt (create or update)
  */
 export async function saveAIPrompt(prompt: AIPrompt): Promise<{ success: boolean; id?: string; error?: string }> {
+    await requireAdmin()
     const supabase = await createClient()
 
     if (prompt.id) {
@@ -247,6 +256,7 @@ export async function saveAIPrompt(prompt: AIPrompt): Promise<{ success: boolean
  * Delete an AI prompt
  */
 export async function deleteAIPrompt(id: string): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -267,6 +277,7 @@ export async function deleteAIPrompt(id: string): Promise<{ success: boolean; er
  * Get available AI models
  */
 export async function getAvailableModels(): Promise<Array<{ id: string; name: string; description: string }>> {
+    await requireCmsRole()
     return [
         { id: 'kimi-k2.6', name: 'Kimi K2.6', description: 'Melhor para posts longos em PT-BR' },
         { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', description: 'Otimizado para conteúdo estruturado' },
@@ -287,6 +298,7 @@ export async function getAIUsageStats(days: number = 30): Promise<{
     byType: Record<string, number>
     byDay: Array<{ date: string; count: number; tokens: number }>
 }> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const startDate = new Date()
@@ -345,6 +357,7 @@ export async function getAIUsageStats(days: number = 30): Promise<{
  * Get prompt categories
  */
 export async function getPromptCategories(): Promise<string[]> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { Metadata } from 'next'
-import { PublishButton } from './publish-button'
 import { normalizePostContent } from '@/lib/utils/post-content'
+import { getPostByPreviewToken } from '@/lib/actions/cms-preview'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,46 +14,18 @@ interface PreviewPageProps {
     params: Promise<{ token: string }>
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 export default async function PreviewPage({ params }: PreviewPageProps) {
     const { token } = await params
 
-    if (!UUID_RE.test(token)) {
+    if (!/^[0-9a-f]{64}$/i.test(token)) {
         notFound()
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!supabaseUrl || !serviceKey) {
+    const preview = await getPostByPreviewToken(token)
+    if (!preview?.post) {
         notFound()
     }
-
-    let post = null
-    try {
-        const res = await fetch(
-            `${supabaseUrl}/rest/v1/posts?id=eq.${encodeURIComponent(token)}&select=*&limit=1`,
-            {
-                headers: {
-                    apikey: serviceKey,
-                    Authorization: `Bearer ${serviceKey}`,
-                },
-            }
-        )
-        if (res.ok) {
-            const data = await res.json()
-            if (data && data.length > 0) {
-                post = data[0]
-            }
-        }
-    } catch (err: any) {
-        console.error('[preview]', err?.message || err)
-    }
-
-    if (!post) {
-        notFound()
-    }
+    const post = preview.post
 
     const html = normalizePostContent(post.content || '')
 
@@ -64,7 +36,6 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
                     <p className="text-sm font-medium text-amber-800">
                         Rascunho — este post ainda não foi publicado
                     </p>
-                    <PublishButton postId={post.id} />
                 </div>
                 <article>
                     <header className="mb-8">

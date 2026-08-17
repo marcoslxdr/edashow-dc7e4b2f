@@ -7,6 +7,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 
 export interface KeywordGroup {
     id: string
@@ -47,6 +48,7 @@ async function ensureTable() {
  * Get all keyword groups
  */
 export async function getKeywordGroups(category?: string): Promise<KeywordGroup[]> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     let query = supabase
@@ -77,6 +79,7 @@ export async function createKeywordGroup(
     keywords: string[],
     category: string = 'geral'
 ): Promise<KeywordGroup> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -101,6 +104,7 @@ export async function updateKeywordGroup(
     id: string,
     updates: { topic?: string; keywords?: string[]; category?: string }
 ): Promise<KeywordGroup> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -122,6 +126,7 @@ export async function updateKeywordGroup(
  * Delete a keyword group
  */
 export async function deleteKeywordGroup(id: string): Promise<void> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { error } = await supabase
@@ -137,6 +142,7 @@ export async function deleteKeywordGroup(id: string): Promise<void> {
  * Add a keyword to a group
  */
 export async function addKeywordToGroup(groupId: string, keyword: string): Promise<KeywordGroup> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     // Get current keywords
@@ -162,6 +168,7 @@ export async function addKeywordToGroup(groupId: string, keyword: string): Promi
  * Remove a keyword from a group
  */
 export async function removeKeywordFromGroup(groupId: string, keyword: string): Promise<KeywordGroup | null> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data: group, error: fetchError } = await supabase
@@ -187,6 +194,7 @@ export async function removeKeywordFromGroup(groupId: string, keyword: string): 
  * Search keywords across all groups
  */
 export async function searchKeywords(query: string): Promise<KeywordGroup[]> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -203,6 +211,7 @@ export async function searchKeywords(query: string): Promise<KeywordGroup[]> {
  * Get all unique categories
  */
 export async function getKeywordCategories(): Promise<string[]> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -219,6 +228,7 @@ export async function getKeywordCategories(): Promise<string[]> {
  * Get all keywords as a flat list (for autocomplete/selection)
  */
 export async function getAllKeywords(): Promise<string[]> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase

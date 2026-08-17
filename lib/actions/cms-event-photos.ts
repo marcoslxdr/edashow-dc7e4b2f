@@ -1,6 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { toActionError } from '@/lib/supabase/action-error'
 import { getEventPhotoProcessingConfig } from '@/lib/event-photos/config'
 import { isValidDriveUrl } from '@/lib/event-videos/parse-url'
@@ -34,6 +35,7 @@ async function getWatermarkBuffer() {
 }
 
 export async function getGalleryByEventId(eventId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('event_photo_galleries')
@@ -46,7 +48,7 @@ export async function getGalleryByEventId(eventId: string) {
 }
 
 export async function getGalleryByEventSlug(slug: string) {
-    const supabase = createAdminClient()
+    const supabase = await createClient()
     
     // Buscar evento pelo slug
     const { data: event, error: eventError } = await supabase
@@ -86,6 +88,7 @@ export async function createOrUpdateGallery(data: {
     contact_whatsapp?: string
     drive_download_url?: string
 }) {
+    await requireCmsRole()
     if (!data.event_id || typeof data.event_id !== 'string') {
         throw new Error('Salve o evento antes de criar a galeria (evento precisa existir no banco).')
     }
@@ -99,7 +102,7 @@ export async function createOrUpdateGallery(data: {
 
     const { id, ...galleryData } = data
     if ('drive_download_url' in galleryData) {
-        galleryData.drive_download_url = driveRaw || null
+        galleryData.drive_download_url = driveRaw || undefined
     }
     
     let result
@@ -129,6 +132,7 @@ export async function createOrUpdateGallery(data: {
 }
 
 export async function ensureGalleryForEvent(eventId: string) {
+    await requireCmsRole()
     const existing = await getGalleryByEventId(eventId)
     if (existing) return existing
 
@@ -140,6 +144,7 @@ export async function ensureGalleryForEvent(eventId: string) {
 }
 
 export async function attachExistingEventPhotos(galleryId: string, photoIds: string[]) {
+    await requireCmsRole()
     if (!photoIds.length) return []
 
     const supabase = createAdminClient()
@@ -175,6 +180,7 @@ export async function attachExistingEventPhotos(galleryId: string, photoIds: str
 }
 
 export async function searchEventGalleries(query: string, excludeEventId?: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     let q = supabase
         .from('event_photo_galleries')
@@ -280,6 +286,7 @@ async function insertProcessedPhotoFromBuffer(
 }
 
 export async function attachMediaToEventGallery(galleryId: string, mediaIds: string[]) {
+    await requireCmsRole()
     if (!mediaIds.length) return []
 
     const supabase = createAdminClient()
@@ -316,6 +323,7 @@ export async function attachMediaToEventGallery(galleryId: string, mediaIds: str
 }
 
 export async function uploadEventPhotos(galleryId: string, formData: FormData) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     const files = formData.getAll('photos') as File[]
 
@@ -348,6 +356,7 @@ export async function uploadEventPhotos(galleryId: string, formData: FormData) {
 }
 
 export async function deleteEventPhoto(photoId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     
     // Buscar foto para obter paths
@@ -382,6 +391,7 @@ export async function deleteEventPhoto(photoId: string) {
 }
 
 export async function reorderEventPhotos(photoIds: string[]) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     
     await Promise.all(photoIds.map((id, index) =>
@@ -392,6 +402,7 @@ export async function reorderEventPhotos(photoIds: string[]) {
 }
 
 export async function deleteGallery(galleryId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     
     // Buscar todas as fotos

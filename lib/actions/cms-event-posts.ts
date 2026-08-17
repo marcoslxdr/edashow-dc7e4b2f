@@ -1,9 +1,11 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { revalidatePath } from 'next/cache'
 
 export async function getEventPosts(eventId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('posts')
@@ -16,6 +18,7 @@ export async function getEventPosts(eventId: string) {
 }
 
 export async function linkPostToEvent(postId: string, eventId: string | null) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('posts')
@@ -37,6 +40,7 @@ export async function linkPostToEvent(postId: string, eventId: string | null) {
 }
 
 export async function searchPostsForLink(query: string, excludeEventId?: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     let q = supabase
         .from('posts')

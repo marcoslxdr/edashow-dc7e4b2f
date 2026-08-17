@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { rewriteFromSource, fetchUrlContent, checkAIConfiguration } from '@/lib/actions/ai-posts'
+import { rewriteFromSource, checkAIConfiguration } from '@/lib/actions/ai-posts'
 
 type InputMode = 'url' | 'text' | 'post'
 type ToneType = 'professional' | 'casual' | 'formal' | 'friendly'
@@ -91,9 +91,14 @@ export function RewriteContentTab() {
         setError(null)
 
         try {
-            const result = await fetchUrlContent(url)
+            const response = await fetch('/api/ai/fetch-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            })
+            const result = await response.json()
 
-            if (!result.success) {
+            if (!response.ok) {
                 setError(result.error || 'Erro ao buscar conteúdo da URL')
                 return
             }

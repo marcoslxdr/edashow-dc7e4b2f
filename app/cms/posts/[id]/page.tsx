@@ -3,7 +3,7 @@ import { getPost, getCategories, getColumnists } from '@/lib/actions/cms-posts'
 import { PostEditor } from '@/components/cms/PostEditor'
 import { notFound } from 'next/navigation'
 
-export default async function CMSPostEditPage({ params }: { params: { id: string } }) {
+export default async function CMSPostEditPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
     let post = null

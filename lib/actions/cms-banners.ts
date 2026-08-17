@@ -3,8 +3,10 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import type { Banner, BannerLocation } from '@/lib/types/banner'
+import { requireCmsRole } from './cms-authz'
 
 export async function getAllBanners(): Promise<{ data: Banner[] | null; error: any }> {
+    await requireCmsRole()
     try {
         const supabase = await createClient()
         const { data, error } = await supabase
@@ -22,6 +24,7 @@ export async function getAllBanners(): Promise<{ data: Banner[] | null; error: a
 }
 
 export async function getBannerById(id: string): Promise<{ data: Banner | null; error: any }> {
+    await requireCmsRole()
     try {
         const supabase = await createClient()
         const { data, error } = await supabase
@@ -61,6 +64,7 @@ export async function getActiveBannersByLocation(location: BannerLocation): Prom
 }
 
 export async function saveBanner(formData: FormData): Promise<{ success: boolean; error?: any; data?: Banner }> {
+    await requireCmsRole()
     try {
         const supabase = await createAdminClient()
 
@@ -83,6 +87,8 @@ export async function saveBanner(formData: FormData): Promise<{ success: boolean
         // Handle image upload
         const imageFile = formData.get('image') as File | null
         if (imageFile && imageFile.size > 0) {
+            if (!imageFile.type.startsWith('image/')) throw new Error('O banner precisa ser uma imagem.')
+            if (imageFile.size > 5 * 1024 * 1024) throw new Error('Banner muito grande. Máximo de 5MB.')
             const fileName = `${Date.now()}_${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from('banners')
@@ -143,6 +149,7 @@ export async function saveBanner(formData: FormData): Promise<{ success: boolean
 }
 
 export async function deleteBanner(id: string): Promise<{ success: boolean; error?: any }> {
+    await requireCmsRole()
     try {
         const supabase = await createAdminClient()
 
@@ -180,7 +187,10 @@ export async function deleteBanner(id: string): Promise<{ success: boolean; erro
 }
 
 export async function uploadBannerImage(file: File): Promise<{ url: string | null; error: any }> {
+    await requireCmsRole()
     try {
+        if (!file.type.startsWith('image/')) throw new Error('O banner precisa ser uma imagem.')
+        if (file.size > 5 * 1024 * 1024) throw new Error('Banner muito grande. Máximo de 5MB.')
         const supabase = await createAdminClient()
 
         // Use admin client to bypass RLS

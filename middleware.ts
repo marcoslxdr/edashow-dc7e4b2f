@@ -98,6 +98,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    // Auth only on CMS routes — public pages must not call Supabase in Edge middleware
-    matcher: ['/cms/:path*'],
+    // Auth only on CMS/legacy admin routes — public pages must not call Supabase in Edge middleware
+    matcher: ['/cms/:path*', '/admin/:path*'],
 }

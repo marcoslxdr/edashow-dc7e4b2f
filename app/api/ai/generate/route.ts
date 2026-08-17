@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server'
 import { generatePost, logGeneration } from '@/lib/ai/content-generator'
 import { checkAIConfiguration } from '@/lib/actions/ai-posts'
 import { isPostGenerationEnabled, POST_GENERATION_DISABLED_MESSAGE } from '@/lib/feature-flags'
+import { requireCmsRole } from '@/lib/actions/cms-authz'
 
 export async function POST(req: Request) {
+    try {
+        await requireCmsRole()
+    } catch {
+        return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    }
+
     try {
         if (!isPostGenerationEnabled()) {
             return NextResponse.json(

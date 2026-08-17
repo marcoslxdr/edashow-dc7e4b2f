@@ -20,11 +20,13 @@ import {
   type TranslateLanguage,
   type InlineOperationResult
 } from '@/lib/ai/inline-operations'
+import { requireCmsRole } from './cms-authz'
 
 /**
  * Check if AI operations are available
  */
 export async function checkAIInlineAvailable(): Promise<boolean> {
+  await requireCmsRole()
   return isAIAvailable()
 }
 
@@ -35,6 +37,7 @@ export async function aiRewrite(
   text: string,
   style: 'more_formal' | 'more_casual' | 'more_concise' | 'more_detailed' | 'different'
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured. Add OPENROUTER_API_KEY to enable.')
   }
@@ -49,6 +52,7 @@ export async function aiExpand(
   text: string,
   context?: string
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -63,6 +67,7 @@ export async function aiSummarize(
   text: string,
   maxLength?: number
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -77,6 +82,7 @@ export async function aiTranslate(
   text: string,
   targetLanguage: TranslateLanguage
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -91,6 +97,7 @@ export async function aiAdjustTone(
   text: string,
   targetTone: ToneType
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -104,6 +111,7 @@ export async function aiAdjustTone(
 export async function aiFixGrammar(
   text: string
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -117,6 +125,7 @@ export async function aiFixGrammar(
 export async function aiSimplify(
   text: string
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -132,6 +141,7 @@ export async function aiContinue(
   context?: string,
   style?: string
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -146,6 +156,7 @@ export async function aiAlternatives(
   text: string,
   count?: number
 ): Promise<string[]> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }
@@ -159,6 +170,7 @@ export async function aiAlternatives(
 export async function aiQuickImprove(
   text: string
 ): Promise<InlineOperationResult> {
+  await requireCmsRole()
   if (!isAIAvailable()) {
     throw new Error('AI not configured')
   }

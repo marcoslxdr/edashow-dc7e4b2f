@@ -2,8 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from './cms-authz'
 
 export async function getPersonas() {
+  await requireAdmin()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ai_personas')
@@ -15,6 +17,7 @@ export async function getPersonas() {
 }
 
 export async function updatePersona(id: string, updates: any) {
+  await requireAdmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('ai_personas')
@@ -27,6 +30,7 @@ export async function updatePersona(id: string, updates: any) {
 }
 
 export async function createPersona(persona: any) {
+  await requireAdmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('ai_personas')
@@ -38,6 +42,7 @@ export async function createPersona(persona: any) {
 }
 
 export async function getKnowledgeBlocks() {
+  await requireAdmin()
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('ai_knowledge_blocks')
@@ -49,6 +54,7 @@ export async function getKnowledgeBlocks() {
 }
 
 export async function updateKnowledgeBlock(id: string, content: string) {
+  await requireAdmin()
   const supabase = await createClient()
   const { error } = await supabase
     .from('ai_knowledge_blocks')

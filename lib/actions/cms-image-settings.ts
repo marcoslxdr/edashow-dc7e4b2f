@@ -5,6 +5,7 @@
  */
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { revalidatePath } from 'next/cache'
 import { ImageSettings } from '@/lib/images/image-optimizer'
 
@@ -25,6 +26,7 @@ export interface UpdateImageSettingsInput {
  * Get image optimization settings
  */
 export async function getImageSettings(): Promise<ImageSettings | null> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -58,6 +60,7 @@ export async function getImageSettings(): Promise<ImageSettings | null> {
  * Update image optimization settings
  */
 export async function updateImageSettings(settings: UpdateImageSettingsInput): Promise<{ success: boolean; error?: string }> {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Use admin client to bypass RLS
@@ -94,6 +97,7 @@ export async function updateImageSettings(settings: UpdateImageSettingsInput): P
  * Upload watermark logo
  */
 export async function uploadWatermarkLogo(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Use admin client to bypass RLS
@@ -145,6 +149,7 @@ export async function uploadWatermarkLogo(formData: FormData): Promise<{ success
  * Remove watermark logo
  */
 export async function removeWatermarkLogo(): Promise<{ success: boolean; error?: string }> {
+    await requireCmsRole()
     const result = await updateImageSettings({
         watermark_logo_url: null,
         watermark_enabled: false

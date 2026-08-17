@@ -3,7 +3,7 @@ import { getEvent } from '@/lib/actions/cms-events'
 import { EventEditor } from '@/components/cms/EventEditor'
 import { notFound } from 'next/navigation'
 
-export default async function CMSEventEditPage({ params }: { params: { id: string } }) {
+export default async function CMSEventEditPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
 
     let event = null

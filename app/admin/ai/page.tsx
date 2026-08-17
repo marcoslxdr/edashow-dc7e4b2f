@@ -1,9 +1,16 @@
 import { getPersonas, getKnowledgeBlocks } from '@/lib/actions/ai-config'
 import { AIConfigTabs } from '@/components/admin/ai/ai-config-tabs'
+import { redirect } from 'next/navigation'
+import { requireAdmin } from '@/lib/actions/cms-authz'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminAIPage() {
+  try {
+    await requireAdmin()
+  } catch {
+    redirect('/cms/login')
+  }
   const personas = await getPersonas().catch(() => [])
   const knowledgeBlocks = await getKnowledgeBlocks().catch(() => [])
 

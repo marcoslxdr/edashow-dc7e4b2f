@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
 import { savePost } from '@/lib/actions/cms-posts'
+import { requireCmsRole } from '@/lib/actions/cms-authz'
 
 export async function POST(req: Request) {
+    try {
+        await requireCmsRole()
+    } catch {
+        return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    }
+
     try {
         const body = await req.json()
         

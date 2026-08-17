@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from './cms-authz'
 
 export interface User {
     id: string
@@ -13,6 +14,7 @@ export interface User {
 }
 
 export async function getUsers(): Promise<User[]> {
+    await requireAdmin()
     const supabase = await createClient()
 
     // Get all users from profiles and join with user_roles
@@ -48,6 +50,7 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function updateUserRole(userId: string, role: 'admin' | 'editor' | 'user'): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 
@@ -86,6 +89,7 @@ export async function updateUserRole(userId: string, role: 'admin' | 'editor' | 
 }
 
 export async function updateUserProfile(userId: string, data: { name?: string; email?: string }): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 
@@ -107,6 +111,7 @@ export async function updateUserProfile(userId: string, data: { name?: string; e
 }
 
 export async function deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+    await requireAdmin()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 
@@ -127,29 +132,26 @@ export async function deleteUser(userId: string): Promise<{ success: boolean; er
         return { success: false, error: error.message }
     }
 
-    // Note: The actual auth user deletion would require admin API
-    // In production, you'd use supabase.auth.admin.deleteUser(userId)
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId)
+    if (authError) {
+        console.error('Error deleting auth user:', authError)
+        return { success: false, error: authError.message }
+    }
 
     revalidatePath('/cms/settings/users')
     return { success: true }
 }
 
 export async function createUser(data: { email: string; password: string; name: string; role: 'admin' | 'editor' }): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
+    await requireAdmin()
+    const supabase = await createAdminClient()
 
-    // Note: Creating users via client-side requires either:
-    // 1. A server-side admin API call
-    // 2. Using signUp and then confirming the user
-    // For now, we'll use signUp which sends a confirmation email
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Create and confirm the account server-side; credentials never reach the browser.
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: data.email,
         password: data.password,
-        options: {
-            data: {
-                name: data.name
-            }
-        }
+        email_confirm: true,
+        user_metadata: { name: data.name }
     })
 
     if (authError) {
@@ -181,23 +183,7 @@ export async function createUser(data: { email: string; password: string; name: 
 }
 
 export async function updateUserPassword(userId: string, password: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = await createClient()
-
-    // Verify if requester is admin
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-        return { success: false, error: 'Usuário não autenticado' }
-    }
-
-    const { data: roleData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single()
-
-    if (roleData?.role !== 'admin') {
-        return { success: false, error: 'Apenas administradores podem alterar senhas' }
-    }
+    await requireAdmin()
 
     const supabaseAdmin = createAdminClient()
     const { error } = await supabaseAdmin.auth.admin.updateUserById(

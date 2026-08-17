@@ -14,6 +14,7 @@ import {
   type TranscriptionResult,
   type ProcessedTranscription as ProcessedTranscriptionType
 } from '@/lib/ai/transcription'
+import { requireCmsRole } from './cms-authz'
 
 // Re-export type for consumers
 export type ProcessedTranscription = ProcessedTranscriptionType
@@ -26,6 +27,7 @@ export async function checkTranscriptionService(): Promise<{
   supportedFormats: string[]
   maxFileSize: string
 }> {
+  await requireCmsRole()
   return {
     available: isTranscriptionAvailable(),
     supportedFormats: getSupportedFormats(),
@@ -39,6 +41,7 @@ export async function checkTranscriptionService(): Promise<{
 export async function transcribeAudioFile(
   formData: FormData
 ): Promise<ProcessedTranscription> {
+  await requireCmsRole()
   const file = formData.get('audio') as File
 
   if (!file) {
@@ -82,6 +85,7 @@ export async function transcribeAudioFromUrl(
     prompt?: string
   }
 ): Promise<ProcessedTranscription> {
+  await requireCmsRole()
   if (!isTranscriptionAvailable()) {
     throw new Error('Transcription service not configured. Add OPENAI_API_KEY to enable.')
   }
@@ -119,6 +123,7 @@ export async function transcribeAudioFromUrl(
 export async function getRawTranscription(
   formData: FormData
 ): Promise<TranscriptionResult> {
+  await requireCmsRole()
   const file = formData.get('audio') as File
 
   if (!file) {
@@ -148,6 +153,7 @@ export async function reprocessTranscription(
   rawText: string,
   duration?: number
 ): Promise<ProcessedTranscription> {
+  await requireCmsRole()
   const { processTranscription } = await import('@/lib/ai/transcription')
 
   return processTranscription({
@@ -170,6 +176,7 @@ export async function validateAudio(
     type: string
   }
 }> {
+  await requireCmsRole()
   const file = formData.get('audio') as File
 
   if (!file) {

@@ -2,6 +2,7 @@
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireCmsRole } from './cms-authz'
 
 export interface SiteSettings {
     id: string
@@ -25,6 +26,7 @@ export interface SiteSettings {
 }
 
 export async function getSiteSettings(): Promise<SiteSettings | null> {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -41,6 +43,7 @@ export async function getSiteSettings(): Promise<SiteSettings | null> {
 }
 
 export async function updateSiteSettings(settings: Partial<SiteSettings>): Promise<{ success: boolean; error?: string }> {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Use admin client to bypass RLS
@@ -86,6 +89,7 @@ export async function updateSiteSettings(settings: Partial<SiteSettings>): Promi
 }
 
 export async function uploadSiteLogo(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const file = formData.get('file') as File
@@ -127,6 +131,7 @@ export async function uploadSiteLogo(formData: FormData): Promise<{ success: boo
 }
 
 export async function uploadFavicon(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Use admin client to bypass RLS

@@ -9,6 +9,7 @@ import { SEOSettingsTab } from '@/components/cms/settings/SEOSettingsTab'
 import { SocialSettingsTab } from '@/components/cms/settings/SocialSettingsTab'
 import { ImageSettingsTab } from '@/components/cms/settings/ImageSettingsTab'
 import { UsersSettingsTab } from '@/components/cms/settings/UsersSettingsTab'
+import { getCurrentUser } from '@/lib/actions/cms-auth'
 
 type TabId = 'general' | 'seo' | 'social' | 'images' | 'users'
 
@@ -38,6 +39,19 @@ export default function SettingsPage() {
         }
         return 'general'
     })
+    const [isAdmin, setIsAdmin] = useState(false)
+
+    useEffect(() => {
+        getCurrentUser().then((user) => setIsAdmin(user?.role === 'admin'))
+    }, [])
+
+    // A non-admin cannot remain on the hidden Users tab when loading a deep link.
+    useEffect(() => {
+        if (!isAdmin && activeTab === 'users') {
+            setActiveTab('general')
+            router.replace('/cms/settings?tab=general', { scroll: false })
+        }
+    }, [activeTab, isAdmin, router])
 
     // Update URL when tab changes
     const handleTabChange = (tabId: TabId) => {
@@ -53,7 +67,8 @@ export default function SettingsPage() {
         }
     }, [tabFromUrl, activeTab])
 
-    const ActiveComponent = tabs.find(t => t.id === activeTab)?.component || GeneralSettingsTab
+    const visibleTabs = tabs.filter(tab => tab.id !== 'users' || isAdmin)
+    const ActiveComponent = visibleTabs.find(t => t.id === activeTab)?.component || GeneralSettingsTab
 
     return (
         <div className="h-full flex flex-col bg-gray-50">
@@ -62,7 +77,7 @@ export default function SettingsPage() {
                 <div className="px-6 py-4">
                     <h1 className="text-2xl font-bold text-gray-900 mb-4">Configurações</h1>
                     <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                        {tabs.map((tab) => {
+                        {visibleTabs.map((tab) => {
                             const Icon = tab.icon
                             const isActive = activeTab === tab.id
                             return (

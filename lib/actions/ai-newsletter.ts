@@ -15,11 +15,13 @@ import {
     NewsletterConfig
 } from '@/lib/ai/newsletter-generator'
 import { openrouter } from '@/lib/ai/openrouter'
+import { requireCmsRole } from './cms-authz'
 
 /**
  * Generate a new newsletter
  */
 export async function generateAINewsletter(config: NewsletterConfig) {
+    await requireCmsRole()
     if (!openrouter.isConfigured()) {
         throw new Error('OpenRouter API não configurada. Adicione OPENROUTER_API_KEY ao .env')
     }
@@ -36,6 +38,7 @@ export async function saveGeneratedNewsletter(
     config: NewsletterConfig,
     scheduledFor?: string
 ) {
+    await requireCmsRole()
     const id = await saveNewsletter(
         newsletter,
         config,
@@ -50,6 +53,7 @@ export async function saveGeneratedNewsletter(
  * Get all newsletters
  */
 export async function getNewsletters(status?: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     let query = supabase
@@ -71,6 +75,7 @@ export async function getNewsletters(status?: string) {
  * Get a single newsletter
  */
 export async function getNewsletter(id: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -97,6 +102,7 @@ export async function updateNewsletter(
         scheduledFor?: string
     }
 ) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -121,6 +127,7 @@ export async function updateNewsletter(
  * Delete newsletter
  */
 export async function deleteNewsletter(id: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -138,6 +145,7 @@ export async function deleteNewsletter(id: string) {
  * Schedule newsletter for sending
  */
 export async function scheduleNewsletter(id: string, scheduledFor: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -158,6 +166,7 @@ export async function scheduleNewsletter(id: string, scheduledFor: string) {
  * Get newsletter schedules
  */
 export async function getSchedules() {
+    await requireCmsRole()
     return getNewsletterSchedules()
 }
 
@@ -176,6 +185,7 @@ export async function upsertSchedule(schedule: {
     categoryFilter?: string[]
     isActive?: boolean
 }) {
+    await requireCmsRole()
     const id = await upsertNewsletterSchedule(schedule)
     revalidatePath('/cms/newsletter')
     return { id, success: true }
@@ -185,6 +195,7 @@ export async function upsertSchedule(schedule: {
  * Delete newsletter schedule
  */
 export async function deleteSchedule(id: string) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -205,6 +216,7 @@ export async function getRecentPostsForNewsletter(
     daysBack: number = 7,
     categoryId?: string
 ) {
+    await requireCmsRole()
     const supabase = await createClient()
     const sinceDate = new Date()
     sinceDate.setDate(sinceDate.getDate() - daysBack)
@@ -231,6 +243,7 @@ export async function getRecentPostsForNewsletter(
  * Mark newsletter as sent
  */
 export async function markNewsletterSent(id: string, recipientsCount?: number) {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { error } = await supabase
@@ -252,6 +265,7 @@ export async function markNewsletterSent(id: string, recipientsCount?: number) {
  * Get newsletter stats
  */
 export async function getNewsletterStats() {
+    await requireCmsRole()
     const supabase = await createClient()
 
     const { data: newsletters } = await supabase

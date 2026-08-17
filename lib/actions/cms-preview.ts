@@ -3,12 +3,14 @@
 import { randomBytes } from 'crypto'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { requireCmsRole } from '@/lib/actions/cms-authz'
 
 /**
  * Generate a preview token for a draft post.
  * Deletes any existing pending tokens for the same post before creating a new one.
  */
 export async function generatePreviewToken(postId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     // Delete existing pending tokens for this post
@@ -43,53 +45,17 @@ export async function generatePreviewToken(postId: string) {
     return data
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function isUUID(val: string) {
-  return UUID_RE.test(val)
-}
-
 /**
- * Get a post by its preview token OR by direct post UUID.
- * This allows public preview links using either format.
+ * Get a post by its high-entropy preview token.
  */
 export async function getPostByPreviewToken(tokenOrId: string) {
     const supabase = createAdminClient()
-
-    // If it looks like a UUID, fetch post directly
-    if (isUUID(tokenOrId)) {
-      const { data: post, error: postError } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('id', tokenOrId)
-        .maybeSingle()
-
-      if (postError) {
-        console.error('[getPostByPreviewToken] uuid query error:', postError)
-        return null
-      }
-      if (!post) {
-        return null
-      }
-
-      return {
-        token: { post_id: tokenOrId, status: 'pending' },
-        post: {
-          ...post,
-          featured_image: post.cover_image_url
-            ? { url: post.cover_image_url, alt_text: post.title || 'Imagem do post' }
-            : null,
-        },
-      }
-    }
-
-    // Otherwise, try token lookup (original behavior)
 
     // Find the token
     const { data: tokenData, error: tokenError } = await supabase
         .from('draft_preview_tokens')
         .select('*')
-        .eq('token', token)
+        .eq('token', tokenOrId)
         .single()
 
     if (tokenError || !tokenData) {
@@ -137,6 +103,7 @@ export async function submitPreviewReview(
     decision: 'approved' | 'rejected',
     comment?: string
 ) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     // Try to get logged-in user info (optional - anonymous reviews allowed)
@@ -213,6 +180,7 @@ export async function submitPreviewReview(
  * Get the active (pending) preview token for a post, if any.
  */
 export async function getActivePreviewToken(postId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data, error } = await supabase
@@ -237,6 +205,7 @@ export async function getActivePreviewToken(postId: string) {
  * Revoke (delete) all pending preview tokens for a post.
  */
 export async function revokePreviewToken(postId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { error } = await supabase

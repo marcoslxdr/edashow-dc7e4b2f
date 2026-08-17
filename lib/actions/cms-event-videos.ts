@@ -1,6 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { toActionError } from '@/lib/supabase/action-error'
 import { parseEventVideoUrl } from '@/lib/event-videos/parse-url'
 import { revalidatePath } from 'next/cache'
@@ -15,6 +16,7 @@ function formatSupabaseError(
 }
 
 export async function getEventVideos(eventId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
     const { data, error } = await supabase
         .from('event_videos')
@@ -27,7 +29,7 @@ export async function getEventVideos(eventId: string) {
 }
 
 export async function getEventVideosBySlug(slug: string) {
-    const supabase = createAdminClient()
+    const supabase = await createClient()
     const { data: event, error: eventError } = await supabase
         .from('events')
         .select('id')
@@ -37,7 +39,13 @@ export async function getEventVideosBySlug(slug: string) {
     if (eventError && eventError.code !== 'PGRST116') throw eventError
     if (!event) return []
 
-    return getEventVideos(event.id)
+    const { data, error } = await supabase
+        .from('event_videos')
+        .select('*')
+        .eq('event_id', event.id)
+        .order('display_order', { ascending: true })
+    if (error) throw toActionError(error, 'Erro ao carregar vídeos do evento.')
+    return data ?? []
 }
 
 export async function addEventVideo(data: {
@@ -45,6 +53,7 @@ export async function addEventVideo(data: {
     video_url: string
     title?: string
 }) {
+    await requireCmsRole()
     if (!data.event_id) {
         throw new Error('Salve o evento antes de adicionar vídeos.')
     }
@@ -105,6 +114,7 @@ export async function addEventVideo(data: {
 }
 
 export async function deleteEventVideo(videoId: string) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const { data: video, error: fetchError } = await supabase

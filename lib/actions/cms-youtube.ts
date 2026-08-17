@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { extractChannelId, getChannelInfo, getLatestVideos, YouTubeChannel } from '@/lib/youtube'
 
 export interface YouTubeConfig {
@@ -19,7 +20,8 @@ export interface YouTubeConfig {
  * Get the current YouTube configuration
  */
 export async function getYouTubeConfig(): Promise<YouTubeConfig | null> {
-    const supabase = createClient()
+    await requireCmsRole()
+    const supabase = await createClient()
     const { data, error } = await supabase
         .from('youtube_config')
         .select('*')
@@ -39,6 +41,7 @@ export async function getYouTubeConfig(): Promise<YouTubeConfig | null> {
  * Save YouTube configuration
  */
 export async function saveYouTubeConfig(config: YouTubeConfig): Promise<{ success: boolean; error?: string }> {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     // Use admin client to bypass RLS
@@ -98,6 +101,7 @@ export async function testYouTubeConnection(url: string): Promise<{
     channelId?: string
     error?: string
 }> {
+    await requireCmsRole()
     try {
         const channelId = await extractChannelId(url)
 

@@ -4,6 +4,7 @@ import React from 'react'
 import { Smartphone, Monitor, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { normalizePostContent } from '@/lib/utils/post-content'
 
 interface PostPreviewProps {
     post: {
@@ -134,7 +135,9 @@ export function PostPreview({ post, readingTime, wordCount }: PostPreviewProps) 
                                     : "prose-sm prose-p:text-gray-600 prose-headings:text-gray-800 prose-strong:text-gray-800 prose-img:rounded-lg"
                             )}
                             dangerouslySetInnerHTML={{
-                                __html: post.content || '<p class="text-gray-400 italic text-sm">Comece a escrever para ver o conteúdo...</p>'
+                                __html: post.content
+                                    ? normalizePostContent(post.content)
+                                    : '<p class="text-gray-400 italic text-sm">Comece a escrever para ver o conteúdo...</p>'
                             }}
                         />
 

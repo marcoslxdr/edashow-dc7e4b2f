@@ -1,10 +1,12 @@
 'use server'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { revalidatePath } from 'next/cache'
 
 // Sponsors
 export async function saveSponsor(data: any) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { id, ...sponsorData } = data
@@ -23,6 +25,7 @@ export async function saveSponsor(data: any) {
 }
 
 export async function getSponsor(id: string) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { data, error } = await supabase
@@ -36,6 +39,7 @@ export async function getSponsor(id: string) {
 }
 
 export async function deleteSponsor(id: string) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { error } = await supabase.from('sponsors').delete().eq('id', id)
@@ -45,6 +49,7 @@ export async function deleteSponsor(id: string) {
 }
 
 export async function toggleSponsorActive(id: string, active: boolean) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { error } = await supabase
@@ -58,6 +63,7 @@ export async function toggleSponsorActive(id: string, active: boolean) {
 }
 
 export async function updateSponsorOrder(sponsors: Array<{ id: string; display_order: number }>) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
 
@@ -72,6 +78,7 @@ export async function updateSponsorOrder(sponsors: Array<{ id: string; display_o
 }
 
 export async function bulkDeleteSponsors(ids: string[]) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { error } = await supabase.from('sponsors').delete().in('id', ids)
@@ -82,6 +89,7 @@ export async function bulkDeleteSponsors(ids: string[]) {
 }
 
 export async function bulkToggleSponsorActive(ids: string[], active: boolean) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { error } = await supabase
@@ -95,6 +103,7 @@ export async function bulkToggleSponsorActive(ids: string[], active: boolean) {
 }
 
 export async function uploadSponsorLogo(formData: FormData) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const file = formData.get('file') as File
@@ -125,6 +134,7 @@ export async function uploadSponsorLogo(formData: FormData) {
 
 // Newsletter
 export async function getNewsletterSubscribers() {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { data, error } = await supabase
@@ -137,6 +147,7 @@ export async function getNewsletterSubscribers() {
 }
 
 export async function toggleSubscriberStatus(id: string, active: boolean) {
+    await requireCmsRole()
     // Use admin client to bypass RLS
     const supabase = await createAdminClient()
     const { error } = await supabase

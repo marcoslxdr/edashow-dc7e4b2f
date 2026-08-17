@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { requireCmsRole } from './cms-authz'
 import { revalidatePath } from 'next/cache'
 import { slugify } from '@/lib/utils'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -55,6 +56,7 @@ function buildEventPayload(input: Record<string, unknown>) {
 }
 
 export async function getEvents() {
+    await requireCmsRole()
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('events')
@@ -66,6 +68,7 @@ export async function getEvents() {
 }
 
 export async function getEvent(id: string) {
+    await requireCmsRole()
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('events')
@@ -78,6 +81,7 @@ export async function getEvent(id: string) {
 }
 
 export async function saveEvent(data: Record<string, unknown>) {
+    await requireCmsRole()
     const supabase = createAdminClient()
 
     const rawId = data.id
@@ -121,6 +125,7 @@ export async function saveEvent(data: Record<string, unknown>) {
 }
 
 export async function deleteEvent(id: string) {
+    await requireCmsRole()
     const supabase = await createAdminClient()
 
     // Use admin client to bypass RLS

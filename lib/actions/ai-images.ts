@@ -12,6 +12,7 @@ import {
   getAvailableProviders as getAIImageProviders,
   type ImageGenerationResult
 } from '@/lib/ai/image-generator'
+import { requireCmsRole } from './cms-authz'
 
 export type { NormalizedImage }
 
@@ -28,6 +29,7 @@ export interface ImageSearchParams {
  * Check which image providers are configured
  */
 export async function checkImageProviders() {
+    await requireCmsRole()
     return getAvailableProviders()
 }
 
@@ -35,6 +37,7 @@ export async function checkImageProviders() {
  * Search images across providers
  */
 export async function searchStockImages(params: ImageSearchParams) {
+    await requireCmsRole()
     const providers = getAvailableProviders()
 
     if (!providers.pexels && !providers.unsplash) {
@@ -79,6 +82,7 @@ export async function searchStockImages(params: ImageSearchParams) {
  * Get curated/popular images
  */
 export async function getCuratedStockImages(count?: number) {
+    await requireCmsRole()
     const providers = getAvailableProviders()
 
     if (!providers.pexels && !providers.unsplash) {
@@ -104,6 +108,7 @@ export async function getCuratedStockImages(count?: number) {
  * Download and save image to storage
  */
 export async function saveImageToStorage(image: NormalizedImage, folder?: string) {
+    await requireCmsRole()
     try {
         const { publicUrl } = await downloadAndSaveImage(image, folder)
         return { url: publicUrl, error: null }
@@ -120,6 +125,7 @@ export async function saveImageToStorage(image: NormalizedImage, folder?: string
  * Get image search suggestions based on topic
  */
 export async function getImageSearchSuggestions(topic: string): Promise<string[]> {
+    await requireCmsRole()
     // Healthcare-related search term enhancements
     const baseTerms = [topic]
 
@@ -144,6 +150,7 @@ export async function getImageSearchSuggestions(topic: string): Promise<string[]
  * Get trending image searches
  */
 export async function getTrendingImageSearches(): Promise<string[]> {
+    await requireCmsRole()
     return [
         'healthcare technology',
         'dental clinic',
@@ -165,6 +172,7 @@ export async function uploadImageFromUrl(
     imageUrl: string,
     folder: string = 'uploads'
 ) {
+    await requireCmsRole()
     try {
         // Create a mock NormalizedImage for the upload
         const image: NormalizedImage = {
@@ -212,6 +220,7 @@ export async function checkAIImageProviders(): Promise<{
     pexels: boolean
     gemini: boolean
 }> {
+    await requireCmsRole()
     return {
         ...getAIImageProviders(),
         gemini: !!process.env.OPENROUTER_API_KEY
@@ -224,6 +233,7 @@ export async function checkAIImageProviders(): Promise<{
 export async function generateAICoverImage(
     request: GenerateImageRequest
 ): Promise<{ url: string; source: 'gemini'; error: string | null }> {
+    await requireCmsRole()
     try {
         const { generateAICoverImage: generateImage } = await import('@/lib/ai/gemini-image-generator')
         const result = await generateImage(request.title, request.content, request.customPrompt)
@@ -245,6 +255,7 @@ export async function generateAICoverImage(
 export async function getAICoverSuggestions(
     request: CoverImageRequest
 ): Promise<ImageGenerationResult> {
+    await requireCmsRole()
     const { title, content, count = 8 } = request
 
     return getCoverImages(title, {
@@ -260,6 +271,7 @@ export async function getAIVisualKeywords(
     title: string,
     content?: string
 ): Promise<string[]> {
+    await requireCmsRole()
     return extractVisualKeywords(title, content)
 }
 
@@ -270,6 +282,7 @@ export async function selectAICoverImage(
     imageUrl: string,
     source: 'pexels' | 'unsplash' | 'gemini'
 ): Promise<{ url: string | null; error: string | null }> {
+    await requireCmsRole()
     // Gemini images are already in storage
     if (source === 'gemini') {
         return { url: imageUrl, error: null }
