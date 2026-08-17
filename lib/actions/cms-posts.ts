@@ -281,52 +281,24 @@ export async function deleteMultiplePosts(ids: string[]) {
 
 export async function getPostForPreview(id: string) {
     await requireCmsRole()
-    // The preview is already protected by the CMS session; use the regular
-    // client so it works even when the service-role key is not configured.
-    const supabase = await createClient()
-    const { data, error } = await supabase
-        .from('posts')
-        .select(`
-            *,
-            category:categories(id, name, slug),
-            author:columnists(id, name, slug, bio, photo_url, instagram_url, twitter_url),
-            cover_image_url
-        `)
-        .eq('id', id)
-        .single()
-
-    // Relacionamentos opcionais podem divergir entre ambientes. Preserve o
-    // preview usando os campos do post quando a expansão falhar.
-    if (error) {
-        const fallback = await supabase
-            .from('posts')
-            .select('*')
-            .eq('id', id)
-            .single()
-
-        if (fallback.error) {
-            console.error(`[getPostForPreview] Erro ao buscar post ${id}:`, error)
-            return null
-        }
+    try {
+        // Keep preview data aligned with the editor query, which is known to
+        // work with the production schema and current RLS policies.
+        const data = await getPost(id)
+        const category = Array.isArray(data.categories) ? data.categories[0] : data.categories
+        const author = Array.isArray(data.columnists) ? data.columnists[0] : data.columnists
 
         return {
-            ...fallback.data,
-            featured_image: fallback.data.cover_image_url
-                ? { url: fallback.data.cover_image_url, alt_text: fallback.data.title || 'Imagem do post' }
+            ...data,
+            category,
+            author,
+            featured_image: data.cover_image_url
+                ? { url: data.cover_image_url, alt_text: data.title || 'Imagem do post' }
                 : null,
         }
-    }
-
-    if (!data) {
-        console.warn(`[getPostForPreview] Post nao encontrado: ${id}`)
+    } catch (error) {
+        console.error(`[getPostForPreview] Erro ao buscar post ${id}:`, error)
         return null
-    }
-
-    return {
-        ...data,
-        featured_image: data.cover_image_url
-            ? { url: data.cover_image_url, alt_text: data.title || 'Imagem do post' }
-            : null,
     }
 }
 
